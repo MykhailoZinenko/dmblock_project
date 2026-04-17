@@ -12,8 +12,8 @@ contract DeployPhase1 is Script {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
 
-        string memory peasantIpfs = vm.envOr("PEASANT_IPFS", string(""));
-        string memory impIpfs = vm.envOr("IMP_IPFS", string(""));
+        string memory peasantIpfs = vm.envOr("PEASANT_IPFS", string("bafybeifmoassowdqemal3ykfnuam5gmbb2ukg24d62puppgjpvwwzd3bsy"));
+        string memory impIpfs = vm.envOr("IMP_IPFS", string("bafybeihua6dmwo7utphh2odhgmq3yaw5jdrtfyb2pkqrf3jwetiw4g6tkm"));
 
         vm.startBroadcast(deployerKey);
 
