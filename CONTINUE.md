@@ -1,28 +1,29 @@
 # Arcana Arena — Session State
 
-## Current Phase: 1 — CardNFT + GameConfig + On-chain SVG
+## Current Phase: 1 — COMPLETE ✓
 
 ## What's Done
 - **Phase 0 complete**: Foundry + React/Vite toolchain verified end-to-end
-  - Foundry project with OpenZeppelin (contracts + upgradeable)
-  - HelloWorld contract, 4 passing tests, deploy script
-  - React + Vite + wagmi + viem frontend
-  - ABI sync script (forge build → typed TS)
-  - Anvil deploy → MetaMask → frontend reads contract greeting
 - **GDD updated**: Status effects defined, schoolType ruling, ammo/melee fix, tokenURI base-stats-for-non-owners, unit size added
-- **Phase 1 contracts complete** (35/35 tests pass):
-  - `CardTypes.sol` — shared enums + structs (CardType, Faction, Rarity, Ability, CardStats, CardData)
+- **Phase 1 complete** (35/35 tests pass):
+  - `CardTypes.sol` — shared enums + structs
   - `IGameConfig.sol` — interface with events
   - `GameConfig.sol` — upgradeable (ERC-7201 storage), admin card CRUD, all changes emit events
-  - `SVGRenderer.sol` — on-chain SVG generation (faction colors, rarity borders, stat boxes, IPFS image embed)
+  - `SVGRenderer.sol` — card PNG background from IPFS + stat number overlays
   - `CardNFT.sol` — ERC-721 + ERC-2981 royalties, dynamic tokenURI, batch mint, authorized minters
   - `DeployPhase1.s.sol` — deploys GameConfig (proxy) + CardNFT, registers Peasant + Imp cards
+  - IPFS: peasant + imp PNGs pinned on Pinata
+  - Verified locally on Anvil: SVG renders correctly with stats in inner circles
+  - Deployed to Base Sepolia (OpenSea testnet no longer available — verify via Basescan)
+
+## Base Sepolia Deployment (Phase 1)
+- GameConfig impl: `0x2bA36848798Ea085818A5aA2f5FEF9037f111af0`
+- GameConfig proxy: `0x38341C8B98e7A0e036fD27C4829Aa147CeAe9177`
+- CardNFT: `0xD43f5617d8df0E3D02130DdAeb35e0192878c1De`
+- Peasant #0 and Imp #1 minted to `0x81b8D225Be9a6164e6af0b60928814e19Aa2bE90`
 
 ## What's Next
-- Pin peasant.png and imp.png to IPFS
-- Deploy to Anvil, verify tokenURI SVG renders in browser
-- Deploy to Base Sepolia, view on OpenSea testnet
-- Begin Phase 2 planning (HeroNFT + Starter Deck)
+- Phase 2: HeroNFT + Starter Deck (requires plan mode discussion first)
 
 ## Dev Workflow
 ```bash
