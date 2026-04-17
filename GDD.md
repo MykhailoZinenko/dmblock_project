@@ -230,9 +230,8 @@ cooldown = 4 turns (static, never changes)
 - Lives on Base Sepolia
 - Represents ownership, trading rights, collection value
 - Never modified, burned, or affected by gameplay
-- Metadata shows base stats to potential buyers
-- While owned: metadata reflects owner's hero stats applied to base stats
-- On purchase: new owner's stats applied automatically via tokenURI
+- Metadata: owner sees hero-modified stats via tokenURI; non-owners see base stats only
+- This prevents marketplace confusion where buyers see seller's hero-modified stats
 
 **Game Card (battle layer — temporary):**
 - Snapshot copy created at match start from selected deck
@@ -253,8 +252,9 @@ cooldown = 4 turns (static, never changes)
 | HP | Base hit points |
 | Initiative | Turn order priority (higher = sooner) |
 | Speed | Maximum action points per activation |
-| Ammo | Ranged shots (0 = melee) |
+| Ammo | Ranged shots (0 = no ranged capability) |
 | Mana Cost | Mana required to deploy |
+| Size | 1 = 1×1 cell, 2 = 2×2 cells (position = top-left cell of block) |
 | Magic Resistance | % flat reduction to all incoming spell damage |
 | School Immunity | Bitmask: immune to specific spell schools |
 | Effect Immunity | Bitmask: immune to specific spell effects |
@@ -292,6 +292,8 @@ struct Ability {
 }
 ```
 
+**schoolType on unit abilities:** A unit ability with a spell school (1–6) is treated as that school for all purposes — it triggers the corresponding School Magic trait bonuses and is blocked by the target's school immunity for that school. Physical (0) abilities are unaffected by spell school mechanics.
+
 ## 6.6 Immunity Bitmasks
 
 **School Immunity (uint8):**
@@ -314,12 +316,27 @@ bit 4  = POISON
 bit 5  = BURN
 bit 6  = CURSE
 bit 7  = SILENCE
-bit 8  = STUN
+bit 8  = ROOTS
 bit 9  = CONFUSION
 // expandable
 ```
 
-## 6.7 Spell Restrictions
+## 6.7 Status Effect Definitions
+
+| Effect | Mechanic |
+|---|---|
+| BLIND | Unit completely skips activation |
+| FEAR | Each turn, unit steps 1 cell back in depth (away from enemy) |
+| SLOW | Reduces unit Speed by effect value |
+| FREEZE | Unit skips activation + takes ice damage |
+| POISON | Deals damage at start of unit activation |
+| BURN | Deals fire damage at start of unit activation |
+| CURSE | Reduces unit stats by effect value |
+| SILENCE | Unit cannot cast its abilities |
+| ROOTS | Unit cannot move; can still attack and cast non-movement abilities |
+| CONFUSION | Affects ranged units only — unit cannot shoot (forgets how to use ranged attack) |
+
+## 6.8 Spell Restrictions
 Spells cannot target units with specific immunity flags:
 ```
 uint32 forbiddenTargetEffectImmunity
@@ -327,7 +344,7 @@ uint32 forbiddenTargetEffectImmunity
 // Example: Light healing spell forbidden on units with UNDEAD flag
 ```
 
-## 6.8 Base Stat Ranges by Rarity (rough estimates)
+## 6.9 Base Stat Ranges by Rarity (rough estimates)
 | Rarity | Attack | HP | Defense |
 |---|---|---|---|
 | Common | 5–10 | 30–50 | 3–8 |
@@ -335,12 +352,12 @@ uint32 forbiddenTargetEffectImmunity
 | Epic | 18–28 | 70–90 | 15–22 |
 | Legendary | 28–40 | 90–120 | 22–30 |
 
-## 6.9 Card Set Size
+## 6.10 Card Set Size
 - 4 factions × 6–8 units = 24–32 unit cards
 - 6 schools × 3–4 spells = 18–24 spell cards
 - Total base set: 42–56 cards
 
-## 6.10 Graveyard
+## 6.11 Graveyard
 - Cards played from hand enter the board as active game cards (unit model appears on grid)
 - When a unit dies its game card moves to the graveyard
 - Spell cards move to graveyard immediately after resolution (success or failure)
@@ -370,7 +387,7 @@ uint32 forbiddenTargetEffectImmunity
 - Player/tactical trait abilities tracked per player in match state
 - No trait reduces cooldowns unless explicitly stated on card
 
-## 6.11 Snapshot Immutability
+## 6.12 Snapshot Immutability
 - At match start a complete snapshot is taken: deck stats, hero stats, GameConfig values
 - Snapshot is immutable for the entire match duration
 - No external changes (GameConfig updates, hero level-ups) affect an ongoing match
@@ -486,7 +503,7 @@ Each unit has a Speed value = total action points per activation:
 - **Attack**: consumes ALL remaining points — always last action
 - **Ability**: consumes ALL remaining points — always last action
 
-Unit may move freely up to its speed, then attack or use ability. Once attack or ability used, activation ends. Units cannot pass through occupied cells.
+Unit may move freely up to its speed, then attack or use ability. Once attack or ability used, activation ends. Units cannot pass through occupied cells. When a unit dies, its cell becomes vacant immediately.
 
 ## 8.6 Combat
 
@@ -502,12 +519,23 @@ Unit may move freely up to its speed, then attack or use ability. Once attack or
 - **Enemy half target**: damage × 0.5
 - **Blocked by adjacent enemy melee**: damage × 0.5, can only be attacked by melee
 - Both conditions: damage × 0.25
-- Ammo decrements per shot — unit becomes melee when ammo = 0
-- Can attack hero directly once barrier down, any distance
+- Ammo decrements per shot — at 0 ammo unit can no longer shoot (does NOT become melee)
+- Standard ranged unit rules still apply at 0 ammo (blocking, half-damage penalties)
+- "Blocked" = enemy unit on adjacent or diagonal cell
+- Can attack hero directly once barrier down, any distance (while ammo > 0)
+
+### Unit Size
+- Size 1: occupies 1×1 cell (default for all common, rare, most epic)
+- Size 2: occupies 2×2 cells (large legendary units — dragons, giants, golems)
+- Position of size 2 unit = top-left cell of the 2×2 block
+- Movement checks all occupied cells are free before moving
+- Attack range measured from nearest cell of the block to target
+- Deployment requires 2×2 free space in deployment zone
+- Targeting a size 2 unit: any of its 4 cells can be targeted, damage applies to unit once
 
 ### Retaliation
 - Attacked unit retaliates once per turn by default
-- Disabled if: attacker has NO_RETALIATION ability, defender has STUN or relevant debuff, or card explicitly states no retaliation
+- Disabled if: attacker has NO_RETALIATION ability, defender has ROOTS or relevant debuff, or card explicitly states no retaliation
 
 ### AOE
 - By default all attacks and spells hit single target
