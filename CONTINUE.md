@@ -1,6 +1,6 @@
 # Arcana Arena — Session State
 
-## Current Phase: Phase 1 COMPLETE ✓ → Phase 2 next
+## Current Phase: Phase 2 COMPLETE ✓ → Phase 3 next
 
 ## Completed Phases
 
@@ -17,33 +17,42 @@
   - `CardTypes.sol` — shared enums (CardType, Faction, Rarity, SpellSchool) + structs (Ability, CardStats, CardData)
   - `IGameConfig.sol` — interface with events
 - **IPFS**: peasant + imp PNGs pinned on Pinata (CIDs in CLAUDE.md)
-- **SVG verified locally**: card art renders, stat numbers positioned correctly in inner circles
 - **Deployed to Base Sepolia**: addresses in CLAUDE.md
 - **Minted**: Peasant #0 and Imp #1 to deployer wallet
-- **GDD updates**: status effects defined (Fear, Blind, Silence, Confusion, Roots), schoolType ruling, ammo→no-melee fix, unit size (2x2), tokenURI visibility
 
-## What's Next — Phase 2: HeroNFT + Starter Deck
+### Phase 2 ✓ — HeroNFT + Starter Deck
+- **Contracts** (79/79 tests pass):
+  - `HeroTypes.sol` — Archetype enum, HeroData struct, 24 trait constants with max levels
+  - `IHeroNFT.sol` — interface for hero creation, level-up, trait views
+  - `HeroNFT.sol` — ERC-721 immutable, hero creation (faction + archetype), ±1 stat variance via prevrandao, batch-mints 20 starter cards, deterministic level-up (stat +1 choice, 2 pseudo-random trait options via hash seed)
+  - `GameConfig.sol` — added starter deck config + starting traits (faction × archetype → traitId)
+  - `DeployPhase2.s.sol` — upgrades GameConfig proxy, deploys HeroNFT, configures starter deck + 16 starting traits
+- **Verified locally on anvil**: hero creation → 20 cards minted → level up works, ~1.06M gas
+- **Not deployed to Base Sepolia yet** — will batch-deploy multiple phases later
+- **GDD updates**: spell recycling mechanic (success → deck bottom, failure → graveyard burn)
+
+## What's Next — Phase 3: Frontend — Wallet, Collection, Hero
 **Requires plan mode discussion first.** From ROADMAP.md:
-- HeroNFT (ERC-721, faction/archetype creation)
-- Batch-mint 20 starter CardNFTs on hero creation
-- Level up: stat choice + deterministic trait options
-- Testable: Create hero → 20 cards appear in wallet
+- Home page with wallet connect (wagmi)
+- Hero creation flow (faction/archetype picker)
+- Collection page (renders on-chain SVGs)
+- Hero profile with level-up UI
 
 ## Git Log
 ```
+271ebef feat: Phase 2 deploy script + integration tests
+0a352a5 feat: HeroNFT contract — hero creation, starter deck mint, level-up system
+bdd11c9 feat: IHeroNFT interface — hero creation, level-up, trait views
+675cbeb feat: GameConfig starter deck + starting trait config with tests
+a3f8b7d feat: HeroTypes library — Archetype enum, HeroData struct, trait constants
+60f209f docs: update CLAUDE.md and CONTINUE.md for session handoff
 8c2702b docs: Phase 1 complete — deployed to Base Sepolia
-1d9bc2d fix: SVGRenderer uses card PNG as background with stat number overlays
-194affc feat: Phase 1 deploy script and session state update
-32a0410 test: Phase 1 test suite — 31 tests for GameConfig, CardNFT, integration
-da5efcf feat: Phase 1 contracts — GameConfig, CardNFT, SVGRenderer
-a7444d8 docs: update GDD with status effects, schoolType ruling, ammo fix, unit size, tokenURI visibility
-104566f feat: initial project scaffolding (Phase 0)
 ```
 
 ## Dev Workflow
 ```bash
 # Terminal 1: anvil (in contracts/)
-# Terminal 2: deploy (see CLAUDE.md for commands)
+# Terminal 2: deploy Phase 1 then Phase 2 (see CLAUDE.md)
 # Terminal 3: cd frontend && npm run dev
 # After contract changes: forge build && cd ../frontend && npm run sync-abi
 ```

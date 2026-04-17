@@ -13,14 +13,19 @@ Tactical card-battle NFT game on Base Sepolia. Full spec in `GDD.md`.
 ```
 ├── contracts/                  # Foundry project
 │   ├── src/
-│   │   ├── GameConfig.sol      # Upgradeable card stats registry
+│   │   ├── GameConfig.sol      # Upgradeable card stats + starter deck + starting traits
 │   │   ├── CardNFT.sol         # ERC-721 + ERC-2981 royalties
-│   │   ├── interfaces/IGameConfig.sol
+│   │   ├── HeroNFT.sol         # ERC-721 hero creation + level-up + starter minting
+│   │   ├── interfaces/
+│   │   │   ├── IGameConfig.sol
+│   │   │   └── IHeroNFT.sol
 │   │   └── libraries/
 │   │       ├── CardTypes.sol   # Shared enums + structs
+│   │       ├── HeroTypes.sol   # Archetype enum, HeroData, trait constants
 │   │       └── SVGRenderer.sol # Card PNG + stat number overlay
-│   ├── test/                   # GameConfig, CardNFT, Integration tests
+│   ├── test/                   # GameConfig, CardNFT, HeroNFT, Integration tests
 │   ├── script/DeployPhase1.s.sol
+│   ├── script/DeployPhase2.s.sol
 │   └── .env                    # Private keys (gitignored)
 ├── frontend/                   # React + Vite app
 ├── assets/
@@ -64,11 +69,13 @@ Tactical card-battle NFT game on Base Sepolia. Full spec in `GDD.md`.
 ```bash
 # Contracts
 cd contracts && forge build        # Compile (uses via_ir)
-cd contracts && forge test         # Run tests (35 passing)
+cd contracts && forge test         # Run tests (79 passing)
 cd contracts && anvil              # Local testnet
 
-# Deploy locally
+# Deploy locally (Phase 1 then Phase 2)
 PRIVATE_KEY=0xac09...ff80 forge script script/DeployPhase1.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+# Then get PROXY_ADMIN via: cast admin <GAME_CONFIG_PROXY> --rpc-url http://127.0.0.1:8545
+PRIVATE_KEY=... GAME_CONFIG_PROXY=... CARD_NFT=... PROXY_ADMIN=... forge script script/DeployPhase2.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 
 # Deploy to Base Sepolia
 source .env && PRIVATE_KEY=$BASE_SEPOLIA_PRIVATE_KEY forge script script/DeployPhase1.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
@@ -83,3 +90,8 @@ cd frontend && npm run dev         # Dev server
 - tokenURI reads stats live from GameConfig — stats update automatically when admin changes them
 - Owner sees hero-modified stats in tokenURI; non-owners see base stats only (hero system Phase 2)
 - OpenSea testnet discontinued — verify NFTs via Basescan or thirdweb, or our own frontend (Phase 3)
+- HeroNFT is immutable (not upgradeable) — starter deck + starting traits stored in GameConfig (upgradeable) so admin can change without redeploying
+- Stat variance uses block.prevrandao — cosmetic ±1, not exploitable
+- Trait options deterministic: `hash(owner, seasonId, level)` — same options every time for same hero at same level
+- No AI co-author lines in git commits
+- Spell recycling: success → back to deck bottom, failure → graveyard burn (GDD 6.4/6.11)
