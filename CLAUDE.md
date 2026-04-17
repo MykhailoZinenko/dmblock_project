@@ -3,46 +3,83 @@
 Tactical card-battle NFT game on Base Sepolia. Full spec in `GDD.md`.
 
 ## Tech Stack
-- **Contracts**: Solidity 0.8+, Foundry (forge/cast/anvil), OpenZeppelin
+- **Contracts**: Solidity 0.8.28, Foundry (forge/cast/anvil), OpenZeppelin 5.6.1
 - **Frontend**: React + Vite, wagmi + viem, Three.js
-- **Chain**: Base Sepolia (testnet)
-- **Upgradeable contracts**: OpenZeppelin Transparent Proxy
+- **Chain**: Base Sepolia (testnet), Chain ID 84532
+- **Upgradeable contracts**: OpenZeppelin Transparent Proxy, ERC-7201 namespaced storage
+- **Compiler**: `via_ir = true` (required for SVG string concat stack depth)
 
 ## Project Structure
 ```
-zadanie2/
-├── contracts/          # Foundry project
-├── frontend/           # React + Vite app
+├── contracts/                  # Foundry project
+│   ├── src/
+│   │   ├── GameConfig.sol      # Upgradeable card stats registry
+│   │   ├── CardNFT.sol         # ERC-721 + ERC-2981 royalties
+│   │   ├── interfaces/IGameConfig.sol
+│   │   └── libraries/
+│   │       ├── CardTypes.sol   # Shared enums + structs
+│   │       └── SVGRenderer.sol # Card PNG + stat number overlay
+│   ├── test/                   # GameConfig, CardNFT, Integration tests
+│   ├── script/DeployPhase1.s.sol
+│   └── .env                    # Private keys (gitignored)
+├── frontend/                   # React + Vite app
 ├── assets/
-│   ├── cards/          # Baked card PNG art (no stat numbers)
-│   ├── models/         # 3D unit models (.glb)
-│   └── card_back.png   # Card back face
-├── GDD.md              # Game Design Document v2.1
-├── ROADMAP.md          # Development phases
-├── CONTINUE.md         # Current session state
-└── CLAUDE.md           # This file
+│   ├── cards/                  # Baked card PNG art (full design, no stat numbers)
+│   ├── models/                 # 3D unit models (.glb)
+│   └── card_back.png
+├── GDD.md                      # Game Design Document v2.1 (source of truth)
+├── ROADMAP.md                  # Development phases
+├── CONTINUE.md                 # Current session state — READ THIS FIRST
+└── CLAUDE.md                   # This file
 ```
 
 ## Rules
 - **Never start a new roadmap phase without discussion and plan mode first** — present plan, get explicit user approval before writing any code
-- Every completed logical unit of work must be: (1) logged in `CONTINUE.md`, (2) memory updated if needed, (3) **git committed**
+- Every completed logical unit of work must be: (1) implemented, (2) verified (compile/test), (3) **git committed immediately**. Never batch multiple units then commit retroactively
 - Always update memory files after significant progress or decisions
+- Before ending a session, update `CONTINUE.md` and `CLAUDE.md` so the next session has full context
+- If something fails 3+ times, stop and explain the situation instead of retrying
 - Follow the roadmap phases in order (see ROADMAP.md)
 - GDD.md is the source of truth for game mechanics and formulas
 - Never modify NFT ownership contracts after deployment (CardNFT, HeroNFT, Marketplace, FreedomRecord are immutable)
 - Card art PNGs are generated externally — don't modify or regenerate them
+- Card PNGs already contain the full card design (frame, name, art, stat icons). SVG only overlays stat numbers on top
 
 ## Contract Architecture
 **Immutable**: CardNFT, HeroNFT, Marketplace, FreedomRecord
 **Upgradeable**: GameConfig, DuelManager, PackOpening, SpellEngine
 
+## Base Sepolia Deployment (Phase 1)
+- GameConfig impl: `0x2bA36848798Ea085818A5aA2f5FEF9037f111af0`
+- GameConfig proxy: `0x38341C8B98e7A0e036fD27C4829Aa147CeAe9177`
+- CardNFT: `0xD43f5617d8df0E3D02130DdAeb35e0192878c1De`
+- Deployer/owner: `0x81b8D225Be9a6164e6af0b60928814e19Aa2bE90`
+
+## IPFS (Pinata)
+- Peasant: `bafybeifmoassowdqemal3ykfnuam5gmbb2ukg24d62puppgjpvwwzd3bsy`
+- Imp: `bafybeihua6dmwo7utphh2odhgmq3yaw5jdrtfyb2pkqrf3jwetiw4g6tkm`
+- Gateway: `https://gateway.pinata.cloud/ipfs/`
+
 ## Commands
 ```bash
 # Contracts
-cd contracts && forge build        # Compile
-cd contracts && forge test         # Run tests
+cd contracts && forge build        # Compile (uses via_ir)
+cd contracts && forge test         # Run tests (35 passing)
 cd contracts && anvil              # Local testnet
+
+# Deploy locally
+PRIVATE_KEY=0xac09...ff80 forge script script/DeployPhase1.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+
+# Deploy to Base Sepolia
+source .env && PRIVATE_KEY=$BASE_SEPOLIA_PRIVATE_KEY forge script script/DeployPhase1.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
 
 # Frontend
 cd frontend && npm run dev         # Dev server
 ```
+
+## Key Design Decisions
+- Single `CardData` struct for units and spells (unused fields stay zero)
+- SVGRenderer is an internal library (inlined at compile, no separate deploy)
+- tokenURI reads stats live from GameConfig — stats update automatically when admin changes them
+- Owner sees hero-modified stats in tokenURI; non-owners see base stats only (hero system Phase 2)
+- OpenSea testnet discontinued — verify NFTs via Basescan or thirdweb, or our own frontend (Phase 3)
