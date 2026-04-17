@@ -254,4 +254,91 @@ contract GameConfigTest is Test {
 
         assertEq(config.getCardCount(), 3);
     }
+
+    // --- Starter Deck tests ---
+
+    function test_SetStarterDeck() public {
+        Ability[] memory abilities = new Ability[](0);
+        vm.startPrank(admin);
+        config.addCard("Peasant", _sampleUnitStats(), abilities, "Qm1");
+        config.addCard("Imp", _sampleUnitStats(), abilities, "Qm2");
+
+        uint256[] memory deck = new uint256[](4);
+        deck[0] = 0;
+        deck[1] = 0;
+        deck[2] = 1;
+        deck[3] = 1;
+        config.setStarterDeck(deck);
+        vm.stopPrank();
+
+        uint256[] memory result = config.getStarterDeck();
+        assertEq(result.length, 4);
+        assertEq(result[0], 0);
+        assertEq(result[2], 1);
+    }
+
+    function test_SetStarterDeck_OnlyOwner() public {
+        uint256[] memory deck = new uint256[](0);
+        vm.prank(nonAdmin);
+        vm.expectRevert();
+        config.setStarterDeck(deck);
+    }
+
+    function test_SetStarterDeck_InvalidCard_Reverts() public {
+        uint256[] memory deck = new uint256[](1);
+        deck[0] = 999;
+        vm.prank(admin);
+        vm.expectRevert("Card does not exist");
+        config.setStarterDeck(deck);
+    }
+
+    function test_SetStarterDeck_EmitsEvent() public {
+        Ability[] memory abilities = new Ability[](0);
+        vm.startPrank(admin);
+        config.addCard("Peasant", _sampleUnitStats(), abilities, "Qm1");
+
+        uint256[] memory deck = new uint256[](1);
+        deck[0] = 0;
+
+        vm.expectEmit(false, false, false, true);
+        emit IGameConfig.StarterDeckUpdated(deck);
+
+        config.setStarterDeck(deck);
+        vm.stopPrank();
+    }
+
+    // --- Starting Trait tests ---
+
+    function test_SetStartingTrait() public {
+        vm.prank(admin);
+        config.setStartingTrait(0, 0, 5);
+
+        assertEq(config.getStartingTrait(0, 0), 5);
+    }
+
+    function test_SetStartingTrait_OnlyOwner() public {
+        vm.prank(nonAdmin);
+        vm.expectRevert();
+        config.setStartingTrait(0, 0, 5);
+    }
+
+    function test_SetStartingTrait_InvalidFaction_Reverts() public {
+        vm.prank(admin);
+        vm.expectRevert("Invalid faction");
+        config.setStartingTrait(5, 0, 5);
+    }
+
+    function test_SetStartingTrait_InvalidArchetype_Reverts() public {
+        vm.prank(admin);
+        vm.expectRevert("Invalid archetype");
+        config.setStartingTrait(0, 5, 5);
+    }
+
+    function test_SetStartingTrait_EmitsEvent() public {
+        vm.expectEmit(true, true, false, true);
+        emit IGameConfig.StartingTraitUpdated(0, 0, 5);
+
+        vm.prank(admin);
+        config.setStartingTrait(0, 0, 5);
+    }
 }

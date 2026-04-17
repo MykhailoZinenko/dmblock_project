@@ -10,6 +10,8 @@ contract GameConfig is OwnableUpgradeable, IGameConfig {
     struct GameConfigStorage {
         mapping(uint256 => CardData) cards;
         uint256 cardCount;
+        uint256[] starterDeck;
+        mapping(uint8 => mapping(uint8 => uint8)) startingTraits;
     }
 
     // keccak256(abi.encode(uint256(keccak256("arcanaarena.storage.GameConfig")) - 1)) & ~bytes32(uint256(0xff))
@@ -95,5 +97,30 @@ contract GameConfig is OwnableUpgradeable, IGameConfig {
 
     function getCardCount() external view returns (uint256) {
         return _getStorage().cardCount;
+    }
+
+    function setStarterDeck(uint256[] calldata cardIds) external onlyOwner {
+        GameConfigStorage storage s = _getStorage();
+        delete s.starterDeck;
+        for (uint256 i = 0; i < cardIds.length; i++) {
+            require(s.cards[cardIds[i]].exists, "Card does not exist");
+            s.starterDeck.push(cardIds[i]);
+        }
+        emit StarterDeckUpdated(cardIds);
+    }
+
+    function getStarterDeck() external view returns (uint256[] memory) {
+        return _getStorage().starterDeck;
+    }
+
+    function setStartingTrait(uint8 faction, uint8 archetype, uint8 traitId) external onlyOwner {
+        require(faction <= 3, "Invalid faction");
+        require(archetype <= 3, "Invalid archetype");
+        _getStorage().startingTraits[faction][archetype] = traitId;
+        emit StartingTraitUpdated(faction, archetype, traitId);
+    }
+
+    function getStartingTrait(uint8 faction, uint8 archetype) external view returns (uint8) {
+        return _getStorage().startingTraits[faction][archetype];
     }
 }
