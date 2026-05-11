@@ -23,7 +23,6 @@ export class Batcher {
   private _indexBuffer: GPUBuffer;
   private _bindGroupCache: Map<BaseTexture, GPUBindGroup>;
   private _quadCount: number;
-  private _flushStart: number;
   private _currentBaseTexture: BaseTexture | null;
   private _currentBlendMode: BlendMode;
   private _batches: BatchEntry[];
@@ -40,7 +39,7 @@ export class Batcher {
     this._indexBuffer = this._createIndexBuffer(device);
     this._bindGroupCache = new Map();
     this._quadCount = 0;
-    this._flushStart = 0;
+
     this._currentBaseTexture = null;
     this._currentBlendMode = BLEND_MODES.NORMAL;
     this._batches = [];
@@ -69,7 +68,7 @@ export class Batcher {
   beginFrame(): void {
     this._bufferIndex = (this._bufferIndex + 1) % 2;
     this._quadCount = 0;
-    this._flushStart = 0;
+
     this._currentBaseTexture = null;
     this._currentBlendMode = BLEND_MODES.NORMAL;
     this._batches = [];
@@ -79,7 +78,6 @@ export class Batcher {
     this._currentBaseTexture = null;
     this._currentBlendMode = BLEND_MODES.NORMAL;
     this._batches = [];
-    this._flushStart = this._quadCount;
   }
 
   pushSprite(sprite: Sprite): boolean {
@@ -194,6 +192,5 @@ export class Batcher {
     this._currentBaseTexture = null;
     this._currentBlendMode = BLEND_MODES.NORMAL;
     this._batches = [];
-    this._flushStart = this._quadCount;
   }
 }

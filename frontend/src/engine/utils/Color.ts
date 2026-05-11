@@ -1,4 +1,4 @@
-export type ColorInput = number | string | number[];
+export type ColorInput = number | string | number[] | Float32Array;
 
 export class Color {
   /**
@@ -6,6 +6,10 @@ export class Color {
    * where each component is in [0, 1].
    */
   static from(input: ColorInput): Float32Array {
+    if (input instanceof Float32Array) {
+      return input;
+    }
+
     if (Array.isArray(input)) {
       const a: number = input.length >= 4 ? input[3] : 1;
       return new Float32Array([input[0], input[1], input[2], a]);
