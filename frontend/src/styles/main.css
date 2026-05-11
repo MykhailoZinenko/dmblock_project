@@ -1,0 +1,90 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  cursor: url('/assets/ui/cursors/cursor_01.png') 24 18, auto;
+}
+
+a, button, [role="button"],
+arcana-button, arcana-icon-button, arcana-tab,
+input, select, textarea,
+input[type="submit"], input[type="button"] {
+  cursor: url('/assets/ui/cursors/cursor_02.png') 24 18, pointer;
+}
+
+[disabled], [aria-disabled="true"],
+arcana-button[disabled], arcana-icon-button[disabled] {
+  cursor: url('/assets/ui/cursors/cursor_03.png') 32 32, not-allowed;
+}
+
+#game-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Screen transition classes (used by ScreenManager) --- */
+.screen-enter {
+  opacity: 0;
+}
+.screen-enter-active {
+  opacity: 1;
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+.screen-leave {
+  opacity: 1;
+}
+.screen-leave-active {
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
+.screen-slide-left-enter {
+  transform: translateX(100%);
+}
+.screen-slide-left-enter-active {
+  transform: translateX(0);
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+.screen-slide-left-leave {
+  transform: translateX(0);
+}
+.screen-slide-left-leave-active {
+  transform: translateX(-100%);
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.screen-slide-right-enter {
+  transform: translateX(-100%);
+}
+.screen-slide-right-enter-active {
+  transform: translateX(0);
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+.screen-slide-right-leave {
+  transform: translateX(0);
+}
+.screen-slide-right-leave-active {
+  transform: translateX(100%);
+  transition: transform var(--duration-slow) var(--ease-out);
+}

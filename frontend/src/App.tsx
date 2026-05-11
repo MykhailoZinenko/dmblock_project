@@ -19,6 +19,7 @@ import Visual10 from "./pages/tests/Visual10";
 import Visual13 from "./pages/tests/Visual13";
 import VisualAssetRegistry from "./pages/tests/VisualAssetRegistry";
 import VisualDebugContainer from "./pages/tests/VisualDebugContainer";
+import VisualStyleGuide from "./pages/tests/VisualStyleGuide";
 import PerfRunner from "./pages/tests/PerfRunner";
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/tests/visual/13" element={<Visual13 />} />
       <Route path="/tests/visual/assets" element={<VisualAssetRegistry />} />
       <Route path="/tests/visual/debug" element={<VisualDebugContainer />} />
+      <Route path="/tests/visual/style-guide" element={<VisualStyleGuide />} />
     </Routes>
   );
 }

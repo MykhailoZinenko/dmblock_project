@@ -14,6 +14,7 @@ const tests = [
   { path: "13", label: "13 — Hex Grid Battle" },
   { path: "assets", label: "Asset Registry" },
   { path: "debug", label: "Debug — Minimal Text+Sprite" },
+  { path: "style-guide", label: "Style Guide — UI Components" },
 ];
 
 export default function VisualIndex() {
