@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "sync-abi": "node scripts/sync-abi.mjs",
+    "update-twap": "node scripts/update-twap.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
