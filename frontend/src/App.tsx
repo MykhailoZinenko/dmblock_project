@@ -7,6 +7,7 @@ import HeroProfile from "./pages/HeroProfile";
 import Marketplace from "./pages/Marketplace";
 import PackOpening from "./pages/PackOpening";
 import DeckBuilder from "./pages/DeckBuilder";
+import Battle from "./pages/Battle";
 import TestRunner from "./pages/TestRunner";
 import VisualIndex from "./pages/tests/VisualIndex";
 import Visual01 from "./pages/tests/Visual01";
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/tests/perf" element={<PerfRunner />} />
       </Route>
       {/* Visual tests render fullscreen without layout */}
+      <Route path="/battle" element={<Battle />} />
       <Route path="/tests/visual/01" element={<Visual01 />} />
       <Route path="/tests/visual/02" element={<Visual02 />} />
       <Route path="/tests/visual/03" element={<Visual03 />} />
