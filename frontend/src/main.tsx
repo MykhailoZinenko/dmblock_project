@@ -10,13 +10,11 @@ import "./index.css";
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <WagmiProvider config={config}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </WagmiProvider>
-    </QueryClientProvider>
-  </StrictMode>
+  <QueryClientProvider client={queryClient}>
+    <WagmiProvider config={config}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </WagmiProvider>
+  </QueryClientProvider>
 );
