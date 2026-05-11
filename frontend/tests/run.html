@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arcana Engine — Unit Tests</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      background: #0a0a12;
+      color: #e0ddd4;
+      font-family: 'Cascadia Code', 'Fira Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    #container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    header {
+      margin-bottom: 36px;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 20px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #c4b5fd;
+      letter-spacing: 0.04em;
+    }
+
+    header p {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    nav {
+      margin-bottom: 24px;
+      padding: 12px 16px;
+      background: #111122;
+      border-radius: 4px;
+      border: 1px solid #1e293b;
+    }
+
+    nav h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    nav a {
+      display: inline-block;
+      margin-right: 12px;
+      margin-bottom: 4px;
+      color: #818cf8;
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    nav a:hover {
+      color: #c4b5fd;
+      text-decoration: underline;
+    }
+
+    #output {
+      /* Results rendered here by harness.run() */
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <header>
+      <h1>Arcana Engine — Unit Tests</h1>
+      <p>Open via VS Code Live Server &mdash; results update on save</p>
+    </header>
+
+    <nav>
+      <h2>Visual Tests &amp; Benchmarks</h2>
+      <a href="perf/run.html">Performance</a>
+      <a href="visual/01-clear-screen.html">01 Clear Screen</a>
+      <a href="visual/02-sprite.html">02 Sprite</a>
+      <a href="visual/03-sprite-transform.html">03 Transforms</a>
+      <a href="visual/04-sprite-batch.html">04 Batching</a>
+      <a href="visual/05-animated-sprite.html">05 Animation</a>
+      <a href="visual/06-graphics.html">06 Graphics</a>
+      <a href="visual/07-camera.html">07 Camera</a>
+      <a href="visual/08-interaction.html">08 Interaction</a>
+      <a href="visual/09-text.html">09 Text</a>
+      <a href="visual/10-particle.html">10 Particles</a>
+      <a href="visual/13-full-scene.html">13 Hex Grid</a>
+      <a href="visual/asset-registry.html">Asset Registry</a>
+    </nav>
+
+    <div id="output"></div>
+  </div>
+
+  <script type="module">
+    import { run } from './harness.js';
+
+    import './engine/Matrix.test.js';
+    import './engine/ObservablePoint.test.js';
+    import './engine/Bounds.test.js';
+    import './engine/Color.test.js';
+    import './engine/Pool.test.js';
+    import './engine/EventEmitter.test.js';
+    import './engine/Ticker.test.js';
+    import './engine/Node.test.js';
+    import './engine/Container.test.js';
+    import './engine/Texture.test.js';
+    import './engine/SpriteSheet.test.js';
+    import './engine/Camera.test.js';
+    import './engine/Sprite.test.js';
+    import './engine/AnimatedSprite.test.js';
+    import './engine/Graphics.test.js';
+    import './engine/InteractionEvent.test.js';
+    import './engine/InteractionManager.test.js';
+    import './engine/BlendMode.test.js';
+    import './engine/Text.test.js';
+    import './engine/ParticleContainer.test.js';
+    import './engine/AssetLoader.test.js';
+
+    const outputEl = document.getElementById('output');
+    run(outputEl);
+  </script>
+</body>
+</html>

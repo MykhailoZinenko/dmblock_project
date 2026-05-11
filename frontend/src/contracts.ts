@@ -3,9 +3,9 @@ import { CardNFTAbi } from "./abi/CardNFT";
 import { HeroNFTAbi } from "./abi/HeroNFT";
 
 export const ADDRESSES = {
-  gameConfig: "0x998abeb3E57409262aE5b751f60747921B33613E",
-  cardNFT: "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49",
-  heroNFT: "0x9d4454B023096f34B160D6B654540c56A1F81688",
+  gameConfig: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+  cardNFT: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+  heroNFT: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
 } as const;
 
 export const CONTRACTS = {

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Visual Test 01 — Clear Screen</title>
+  <style>
+    body { margin: 0; background: #000; }
+    canvas { width: 100vw; height: 100vh; display: block; }
+    .info { position: fixed; top: 10px; left: 10px; color: #fff; font: 14px monospace; z-index: 1; }
+  </style>
+</head>
+<body>
+  <div class="info">
+    <strong>Test 01: Clear Screen</strong><br>
+    Expected: Canvas fills with dark navy blue (0x1a1a3e).<br>
+    If you see black or an error, WebGPU init failed.
+  </div>
+  <canvas id="c"></canvas>
+  <script type="module">
+    import { Engine } from '../../src/engine/Engine.js';
+
+    try {
+      const engine = await Engine.create(document.getElementById('c'), {
+        backgroundColor: 0x1a1a3e,
+      });
+      document.querySelector('.info').innerHTML += '<br><span style="color:lime">✓ Engine created, clearing to 0x1a1a3e</span>';
+    } catch (e) {
+      document.querySelector('.info').innerHTML += `<br><span style="color:red">✗ ${e.message}</span>`;
+    }
+  </script>
+</body>
+</html>
