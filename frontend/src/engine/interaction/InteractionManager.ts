@@ -232,7 +232,11 @@ export class InteractionManager {
         target.emit('pointerover', overEvent);
       }
       this._hovered = target;
-      this._canvas.style.cursor = (target && target.cursor) ? target.cursor : '';
+      if (target && target.cursor) {
+        this._canvas.style.cursor = "url('/assets/ui/cursors/cursor_02.png') 24 18, pointer";
+      } else {
+        this._canvas.style.cursor = "url('/assets/ui/cursors/cursor_01.png') 24 18, auto";
+      }
     }
 
     if (target) {
@@ -268,7 +272,7 @@ export class InteractionManager {
       outEvent.currentTarget = this._hovered;
       this._hovered.emit('pointerout', outEvent);
       this._hovered = null;
-      this._canvas.style.cursor = '';
+      this._canvas.style.cursor = "url('/assets/ui/cursors/cursor_01.png') 24 18, auto";
     }
   }
 

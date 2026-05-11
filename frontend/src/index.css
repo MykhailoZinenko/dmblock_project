@@ -10,7 +10,7 @@ body {
   overflow-y: auto;
 }
 
-a, button, [role="button"], input, select, textarea {
+a, button, [role="button"], input, select, textarea, .clickable {
   cursor: url('/assets/ui/cursors/cursor_02.png') 24 18, pointer;
 }
 
