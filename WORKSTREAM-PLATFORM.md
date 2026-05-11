@@ -33,9 +33,8 @@ Everything related to the card economy, deck management, pack system, admin tool
 **Shared JS module**: deck validation logic
 - Deck size: exactly 20 cards
 - Copy limits by rarity: Common 4, Rare 3, Epic 2, Legendary 1
-- Minimum units: 6 (all archetypes)
-- Archetype composition: Warrior/Sentinel min 12 units, Mage min 12 spells, Ranger no restriction
 - NFT ownership: 1 NFT = 1 deck copy (verify on-chain balances)
+- No archetype or card-type composition rules
 
 **Frontend**: Deck builder page
 - View owned cards, drag/drop into deck slots

@@ -70,7 +70,7 @@ Spells are generic — no spell school system. Spells are defined by their effec
 ## 4.1 Hero Creation
 When a player connects their wallet for the first time they create a hero by choosing:
 1. **Faction** — defines starting trait and hero identity
-2. **Archetype** — defines starting stats and deck composition rules
+2. **Archetype** — defines starting primary stats
 
 A small random variance (±1) is applied to non-primary stats at creation for uniqueness.
 
@@ -83,14 +83,14 @@ A small random variance (±1) is applied to non-primary stats at creation for un
 - Lore: *"The Wises equip every new prisoner with basic weapons before their first fight. Entertainment requires at least a show."*
 
 ## 4.2 Archetypes
-| Archetype | Attack | Defense | SpellPower | Knowledge | Deck Rule |
-|---|---|---|---|---|---|
-| Warrior | 4 | 2 | 1 | 1 | Min 60% units (12+ of 20) |
-| Mage | 1 | 0 | 3 | 3 | Min 60% spells (12+ of 20) |
-| Ranger | 2 | 2 | 2 | 2 | No restriction, min 6 units |
-| Sentinel | 0 | 4 | 2 | 2 | Min 60% units (12+ of 20) |
+| Archetype | Attack | Defense | SpellPower | Knowledge |
+|---|---|---|---|---|
+| Warrior | 4 | 2 | 1 | 1 |
+| Mage | 1 | 0 | 3 | 3 |
+| Ranger | 2 | 2 | 2 | 2 |
+| Sentinel | 0 | 4 | 2 | 2 |
 
-All archetypes: minimum 6 units in deck regardless of archetype rule.
+Archetype defines starting primary stats only — it does not constrain deck composition.
 
 ## 4.3 Hero Primary Stats
 | Stat | Effect |
@@ -300,12 +300,8 @@ Status effects are applied by spells. No immunity system — all units can be af
 ## 7.1 Rules
 - **Deck size**: exactly 20 cards
 - **Copy limits by rarity**: Common 4, Rare 3, Epic 2, Legendary 1
-- **Minimum units**: 6 (all archetypes)
-- **Archetype composition**:
-  - Warrior / Sentinel: minimum 12 units
-  - Mage: minimum 12 spells
-  - Ranger: no upper limit restriction
 - **Cross-faction**: allowed — no restrictions on card ownership or deck composition
+- **No archetype or card-type composition rules** — any mix of units/spells is valid
 - **NFT ownership**: 1 NFT = 1 deck copy. 2 copies requires owning 2 NFTs
 
 ## 7.2 Deck Selection Flow

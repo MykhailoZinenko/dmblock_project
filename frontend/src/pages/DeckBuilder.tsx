@@ -48,8 +48,8 @@ export default function DeckBuilder() {
   );
 
   const validation = useMemo(() => {
-    return validateDeck(slots, cardMeta, ownedCounts, hero?.archetype ?? -1);
-  }, [slots, cardMeta, ownedCounts, hero?.archetype]);
+    return validateDeck(slots, cardMeta, ownedCounts);
+  }, [slots, cardMeta, ownedCounts]);
 
   if (!isConnected) {
     return <div className="page"><p className="msg-info">Connect your wallet to build a deck.</p></div>;
@@ -58,7 +58,7 @@ export default function DeckBuilder() {
     return (
       <div className="page">
         <h1>Deck Builder</h1>
-        <p style={{ marginBottom: "1rem" }}>You need a hero before building a deck. Archetype determines deck rules.</p>
+        <p style={{ marginBottom: "1rem" }}>You need a hero before building a deck.</p>
         <Link to="/create"><button>Create Hero</button></Link>
       </div>
     );

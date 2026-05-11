@@ -1,7 +1,4 @@
 export const DECK_SIZE = 20;
-export const MIN_UNITS_TOTAL = 6;
-export const ARCHETYPE_UNIT_MIN = 12;
-export const ARCHETYPE_SPELL_MIN = 12;
 
 export const RARITY_CAP: Record<number, number> = {
   0: 4, // Common
@@ -15,13 +12,6 @@ export const RARITY_NAME: Record<number, string> = {
   1: "Rare",
   2: "Epic",
   3: "Legendary",
-};
-
-export const ARCHETYPE_NAME: Record<number, string> = {
-  0: "Warrior",
-  1: "Mage",
-  2: "Ranger",
-  3: "Sentinel",
 };
 
 export type CardMeta = {
@@ -60,7 +50,6 @@ export function validateDeck(
   slots: (number | null)[],
   cardMeta: Map<number, CardMeta>,
   ownedCounts: Map<number, number>,
-  heroArchetype: number,
 ): ValidationResult {
   const used = new Map<number, number>();
   let filled = 0;
@@ -113,29 +102,6 @@ export function validateDeck(
     ok: ownershipViolations.length === 0,
     detail: ownershipViolations.join("; ") || undefined,
   });
-
-  rules.push({
-    code: "MIN_UNITS",
-    label: `At least ${MIN_UNITS_TOTAL} units total`,
-    ok: unitCount >= MIN_UNITS_TOTAL,
-    detail: `${unitCount} units`,
-  });
-
-  if (heroArchetype === 0 || heroArchetype === 3) {
-    rules.push({
-      code: "ARCHETYPE_UNITS",
-      label: `${ARCHETYPE_NAME[heroArchetype]}: ≥${ARCHETYPE_UNIT_MIN} units`,
-      ok: unitCount >= ARCHETYPE_UNIT_MIN,
-      detail: `${unitCount} units`,
-    });
-  } else if (heroArchetype === 1) {
-    rules.push({
-      code: "ARCHETYPE_SPELLS",
-      label: `Mage: ≥${ARCHETYPE_SPELL_MIN} spells`,
-      ok: spellCount >= ARCHETYPE_SPELL_MIN,
-      detail: `${spellCount} spells`,
-    });
-  }
 
   const perCardIdCap = new Map<number, number>();
   for (const cid of cardMeta.keys()) {
