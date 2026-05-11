@@ -28,36 +28,26 @@ library TraitConstants {
     // Magic traits (max level 10)
     uint8 internal constant WISDOM = 7;
     uint8 internal constant SPELL_FOCUS = 8;
+    uint8 internal constant ARCANE_MASTERY = 9;
 
-    // Magic school traits (max level 5)
-    uint8 internal constant FIRE_MAGIC = 9;
-    uint8 internal constant EARTH_MAGIC = 10;
-    uint8 internal constant WATER_MAGIC = 11;
-    uint8 internal constant AIR_MAGIC = 12;
-    uint8 internal constant DARK_MAGIC = 13;
-    uint8 internal constant LIGHT_MAGIC = 14;
-
-    // Tactical traits (max level 5)
-    uint8 internal constant INITIATIVE_BOOST = 15;
-    uint8 internal constant INITIATIVE_SUPPRESSION = 16;
-    uint8 internal constant MOVEMENT_BOOST = 17;
-    uint8 internal constant FIRST_AID = 18;
-    uint8 internal constant HAND_REVELATION = 19;
-    uint8 internal constant TACTICS = 20;
+    // Faction magic traits (max level 5)
+    uint8 internal constant CASTLE_MAGIC = 10;
+    uint8 internal constant INFERNO_MAGIC = 11;
+    uint8 internal constant NECROPOLIS_MAGIC = 12;
+    uint8 internal constant DUNGEON_MAGIC = 13;
 
     // Passive traits (max level 5)
-    uint8 internal constant MANA_GROWTH = 21;
-    uint8 internal constant LAST_STAND = 22;
-    uint8 internal constant MOMENTUM_SCALING = 23;
+    uint8 internal constant MANA_GROWTH = 14;
+    uint8 internal constant LAST_STAND = 15;
+    uint8 internal constant MOMENTUM_SCALING = 16;
 
-    uint8 internal constant TOTAL_TRAITS = 24;
+    uint8 internal constant TOTAL_TRAITS = 17;
 
     function maxTraitLevel(uint8 traitId) internal pure returns (uint8) {
         require(traitId < TOTAL_TRAITS, "Invalid trait ID");
-        if (traitId <= VITALITY) return 10;       // Combat traits: 0-6
-        if (traitId <= SPELL_FOCUS) return 10;     // Wisdom, Spell Focus: 7-8
-        if (traitId <= LIGHT_MAGIC) return 5;      // School magic: 9-14
-        if (traitId <= TACTICS) return 5;           // Tactical: 15-20
-        return 5;                                   // Passive: 21-23
+        if (traitId <= VITALITY) return 10;           // Combat: 0-6
+        if (traitId <= ARCANE_MASTERY) return 10;     // Magic: 7-9
+        if (traitId <= DUNGEON_MAGIC) return 5;       // Faction magic: 10-13
+        return 5;                                      // Passive: 14-16
     }
 }
