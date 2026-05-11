@@ -8,7 +8,7 @@ const STAT_LABELS = ["Attack", "Defense", "Spell Power", "Knowledge"];
 
 export default function HeroProfile() {
   const { isConnected } = useAccount();
-  const { hero, hasHero, traits, traitOptions, refetchAll, isLoading } = useHero();
+  const { hero, heroId, hasHero, traits, traitOptions, refetchAll, isLoading } = useHero();
   const [selectedStat, setSelectedStat] = useState<number | null>(null);
   const [selectedTrait, setSelectedTrait] = useState<number | null>(null);
 
@@ -45,11 +45,11 @@ export default function HeroProfile() {
   const canLevelUp = hero.level < 50;
 
   const handleLevelUp = () => {
-    if (selectedStat === null || selectedTrait === null) return;
+    if (selectedStat === null || selectedTrait === null || heroId === undefined) return;
     writeContract({
       ...CONTRACTS.heroNFT,
       functionName: "levelUp",
-      args: [0n, selectedStat, selectedTrait],
+      args: [heroId, selectedStat, selectedTrait],
     });
   };
 

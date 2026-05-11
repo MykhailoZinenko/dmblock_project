@@ -39,17 +39,17 @@
 - **Verified**: Full hero creation → collection view → level-up flow in browser
 
 ## Phase 4: Marketplace
-- [ ] Marketplace contract (list/buy/cancel, atomic, ERC-2981 royalties)
-- [ ] Frontend marketplace page (browse, list, buy)
+- [x] Marketplace contract (list/buy/cancel, atomic, ERC-2981 royalties)
+- [x] Frontend marketplace page (browse, list, buy)
 - **Testable**: List card from wallet A, buy from wallet B
 
-## Phase 5: Deck Builder
-- [ ] Deck validation logic (shared JS module) — archetype composition rules enforced here
-- [ ] Copy limits by rarity: Common 4, Rare 3, Epic 2, Legendary 1
-- [ ] NFT ownership verification (1 NFT = 1 deck copy)
-- [ ] Deck builder UI (drag/drop, real-time validation)
-- [ ] Save/load decks off-chain (localStorage)
-- **Testable**: Build valid 20-card deck, validation catches invalid decks
+## Phase 5: Deck Builder ✓ COMPLETE
+- [x] Deck validation logic (shared JS module) — deck=20, rarity copy caps (C4/R3/E2/L1), NFT ownership
+- [x] Copy limits by rarity: Common 4, Rare 3, Epic 2, Legendary 1
+- [x] NFT ownership verification (1 NFT = 1 deck copy)
+- [x] Deck builder UI (drag/drop, real-time validation)
+- [x] Save/load decks off-chain (localStorage)
+- **Verified**: 20-slot drag/drop, live rule validation, multi-deck localStorage save/load per wallet
 
 ## Phase 6: Pack Opening + Chainlink VRF
 - [ ] PackOpening contract with Chainlink VRF
