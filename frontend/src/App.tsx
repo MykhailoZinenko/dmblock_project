@@ -19,6 +19,7 @@ import Visual10 from "./pages/tests/Visual10";
 import Visual13 from "./pages/tests/Visual13";
 import VisualAssetRegistry from "./pages/tests/VisualAssetRegistry";
 import VisualDebugContainer from "./pages/tests/VisualDebugContainer";
+import PerfRunner from "./pages/tests/PerfRunner";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/hero" element={<HeroProfile />} />
         <Route path="/tests" element={<TestRunner />} />
         <Route path="/tests/visual" element={<VisualIndex />} />
+        <Route path="/tests/perf" element={<PerfRunner />} />
       </Route>
       {/* Visual tests render fullscreen without layout */}
       <Route path="/tests/visual/01" element={<Visual01 />} />
