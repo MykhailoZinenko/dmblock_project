@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Engine } from "../../engine/Engine.js";
-import { Sprite } from "../../engine/nodes/Sprite.js";
-import { Text } from "../../engine/nodes/Text.js";
+import { Engine } from "../../engine/Engine";
+import { Sprite } from "../../engine/nodes/Sprite";
+import { Text } from "../../engine/nodes/Text";
 
 export default function VisualDebugContainer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Engine } from "../../engine/Engine.js";
-import { Sprite } from "../../engine/nodes/Sprite.js";
+import { Engine } from "../../engine/Engine";
+import { Sprite } from "../../engine/nodes/Sprite";
 
 export default function Visual07() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -9,7 +9,7 @@ import {
   ArcanaAvatar,
   ArcanaCard,
   ArcanaBar,
-} from "../../ui/components/index.js";
+} from "../../ui/components/index";
 import { useState } from "react";
 
 export default function VisualStyleGuide() {

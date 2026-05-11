@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { Engine } from "../../engine/Engine.js";
-import { Container } from "../../engine/nodes/Container.js";
-import { AnimatedSprite } from "../../engine/nodes/AnimatedSprite.js";
-import { Graphics } from "../../engine/nodes/Graphics.js";
-import { Text } from "../../engine/nodes/Text.js";
-import { SpriteSheet } from "../../engine/textures/SpriteSheet.js";
+import { Engine } from "../../engine/Engine";
+import { Container } from "../../engine/nodes/Container";
+import { AnimatedSprite } from "../../engine/nodes/AnimatedSprite";
+import { Graphics } from "../../engine/nodes/Graphics";
+import { Text } from "../../engine/nodes/Text";
+import { SpriteSheet } from "../../engine/textures/SpriteSheet";
 
 export default function Visual13() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

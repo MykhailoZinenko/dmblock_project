@@ -11,10 +11,10 @@ export default function PerfRunner() {
     hasRun.current = true;
 
     (async () => {
-      const harness = await import("../../tests/perf/harness.js");
+      const harness = await import("../../tests/perf/harness");
 
       // Register all benchmarks (side-effect import)
-      await import("../../tests/perf/engine.bench.js");
+      await import("../../tests/perf/engine.bench");
 
       if (outputRef.current) {
         await harness.runAll(outputRef.current);

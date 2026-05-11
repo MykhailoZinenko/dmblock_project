@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Engine } from "../../engine/Engine.js";
-import { ParticleContainer } from "../../engine/nodes/ParticleContainer.js";
+import { Engine } from "../../engine/Engine";
+import { ParticleContainer } from "../../engine/nodes/ParticleContainer";
 
 export default function Visual10() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

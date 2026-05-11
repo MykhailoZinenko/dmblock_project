@@ -12,29 +12,29 @@ export default function TestRunner() {
 
     (async () => {
       // Dynamic imports so tests don't load on every page
-      const harness = await import("../tests/harness.js");
+      const harness = await import("../tests/harness");
 
-      await import("../tests/engine/Matrix.test.js");
-      await import("../tests/engine/ObservablePoint.test.js");
-      await import("../tests/engine/Bounds.test.js");
-      await import("../tests/engine/Color.test.js");
-      await import("../tests/engine/Pool.test.js");
-      await import("../tests/engine/EventEmitter.test.js");
-      await import("../tests/engine/Ticker.test.js");
-      await import("../tests/engine/Node.test.js");
-      await import("../tests/engine/Container.test.js");
-      await import("../tests/engine/Texture.test.js");
-      await import("../tests/engine/SpriteSheet.test.js");
-      await import("../tests/engine/Camera.test.js");
-      await import("../tests/engine/Sprite.test.js");
-      await import("../tests/engine/AnimatedSprite.test.js");
-      await import("../tests/engine/Graphics.test.js");
-      await import("../tests/engine/InteractionEvent.test.js");
-      await import("../tests/engine/InteractionManager.test.js");
-      await import("../tests/engine/BlendMode.test.js");
-      await import("../tests/engine/Text.test.js");
-      await import("../tests/engine/ParticleContainer.test.js");
-      await import("../tests/engine/AssetLoader.test.js");
+      await import("../tests/engine/Matrix.test");
+      await import("../tests/engine/ObservablePoint.test");
+      await import("../tests/engine/Bounds.test");
+      await import("../tests/engine/Color.test");
+      await import("../tests/engine/Pool.test");
+      await import("../tests/engine/EventEmitter.test");
+      await import("../tests/engine/Ticker.test");
+      await import("../tests/engine/Node.test");
+      await import("../tests/engine/Container.test");
+      await import("../tests/engine/Texture.test");
+      await import("../tests/engine/SpriteSheet.test");
+      await import("../tests/engine/Camera.test");
+      await import("../tests/engine/Sprite.test");
+      await import("../tests/engine/AnimatedSprite.test");
+      await import("../tests/engine/Graphics.test");
+      await import("../tests/engine/InteractionEvent.test");
+      await import("../tests/engine/InteractionManager.test");
+      await import("../tests/engine/BlendMode.test");
+      await import("../tests/engine/Text.test");
+      await import("../tests/engine/ParticleContainer.test");
+      await import("../tests/engine/AssetLoader.test");
 
       if (outputRef.current) {
         await harness.run(outputRef.current);

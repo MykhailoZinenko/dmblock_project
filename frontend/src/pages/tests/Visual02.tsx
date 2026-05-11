@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Engine } from "../../engine/Engine.js";
-import { Sprite } from "../../engine/nodes/Sprite.js";
-import { SpriteSheet } from "../../engine/textures/SpriteSheet.js";
-import { AnimatedSprite } from "../../engine/nodes/AnimatedSprite.js";
+import { Engine } from "../../engine/Engine";
+import { Sprite } from "../../engine/nodes/Sprite";
+import { SpriteSheet } from "../../engine/textures/SpriteSheet";
+import { AnimatedSprite } from "../../engine/nodes/AnimatedSprite";
 
 export default function Visual02() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

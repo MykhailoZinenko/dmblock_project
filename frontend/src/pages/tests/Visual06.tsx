@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Engine } from "../../engine/Engine.js";
-import { Graphics } from "../../engine/nodes/Graphics.js";
+import { Engine } from "../../engine/Engine";
+import { Graphics } from "../../engine/nodes/Graphics";
 
 export default function Visual06() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
