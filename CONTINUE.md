@@ -1,6 +1,31 @@
 # Arcana Arena — Session State
 
-## Current Phase: Phase 2 COMPLETE ✓ → Phase 3 next
+## Current Phase: Phase 6 COMPLETE locally ✓ (Base Sepolia deploy still pending)
+
+### Phase 6 ✓ — Pack Opening + Chainlink VRF (local)
+- **PackOpening.sol** (upgradeable, 7/7 tests pass): tier configs, weighted pulls by price, guaranteed-rarity gating on first slot, admin base price + TWAP, withdraw, VRF config setter.
+- **DeployPhase6.s.sol**: env-driven; deploys MockVrfCoordinator when `VRF_COORDINATOR` is unset (local mode), or wires to a real coordinator on Base Sepolia.
+- **Deployed locally** (anvil 31337):
+  - PackOpening proxy: `0x4EE6eCAD1c2Dae9f525404De8555724e3c35d07B`
+  - PackOpening impl: `0x172076E0166D1F9Cc711C77Adf8488051744980C`
+  - MockVrfCoordinator: `0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8`
+- **Frontend wired** in `frontend/src/contracts.ts`. PackOpening page auto-fulfills the mock on chain 31337 so the local UX doesn't hang, and the reveal now shows full card art / name / rarity from `CardNFT.tokenURI`.
+- **TWAP updater** at `frontend/scripts/update-twap.mjs` (run via `npm run update-twap`): joins Marketplace `Sold` events from the last 7 days with `CardNFT.tokenCardId`, pushes per-card averages + counts via `setCardPrice`. Contract still uses admin base price until trade count ≥ 10.
+
+### Still pending for Phase 6
+- **Base Sepolia deploy** — needs a real Chainlink VRF v2.5 subscription. Once you have one, run:
+  ```bash
+  source .env && PRIVATE_KEY=$BASE_SEPOLIA_PRIVATE_KEY \
+    GAME_CONFIG_PROXY=0x38341C8B98e7A0e036fD27C4829Aa147CeAe9177 \
+    CARD_NFT=0xD43f5617d8df0E3D02130DdAeb35e0192878c1De \
+    VRF_COORDINATOR=0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE \
+    VRF_KEY_HASH=0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71 \
+    VRF_SUBSCRIPTION_ID=<sub id> \
+    forge script script/DeployPhase6.s.sol --tc DeployPhase6 --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
+  ```
+  Then add the deployed proxy as a consumer on vrf.chain.link and fund the subscription. Verify the coordinator + keyHash against current Chainlink docs before shipping.
+- **TWAP keeper** — `update-twap.mjs` currently runs one-shot. For Base Sepolia, schedule it (cron / a serverless worker) every few minutes.
+- **Card reveal animation** — current UI is static (image + name + rarity). No timed flip / rarity-glow effect yet.
 
 ## Completed Phases
 
