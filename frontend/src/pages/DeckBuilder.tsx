@@ -17,6 +17,7 @@ import {
   deleteDeck,
   type SavedDeck,
 } from "../lib/deckStorage";
+import { ArcanaButton, ArcanaRibbon } from "../ui/components/index";
 
 type DragPayload =
   | { source: "pool"; cardId: number }
@@ -56,15 +57,20 @@ export default function DeckBuilder() {
   }
   if (!hasHero) {
     return (
-      <div className="page">
-        <h1>Deck Builder</h1>
-        <p style={{ marginBottom: "1rem" }}>You need a hero before building a deck.</p>
-        <Link to="/create"><button>Create Hero</button></Link>
+      <div className="page page-shell">
+        <div className="page-hero">
+          <div>
+            <div className="page-kicker">Deck Builder</div>
+            <h1 className="page-title">Build Your First Deck</h1>
+            <p className="page-copy">You need a hero before building a deck.</p>
+          </div>
+        </div>
+        <Link to="/create"><ArcanaButton variant="blue">Create Hero</ArcanaButton></Link>
       </div>
     );
   }
   if (isLoading) {
-    return <div className="page"><h1>Deck Builder</h1><p className="msg-info">Loading cards...</p></div>;
+    return <div className="page page-shell"><h1 className="page-title">Deck Builder</h1><p className="msg-info">Loading cards...</p></div>;
   }
 
   const archetype = hero?.archetype ?? 0;
@@ -172,12 +178,16 @@ export default function DeckBuilder() {
   }
 
   return (
-    <div className="page deck-builder">
+    <div className="page page-shell deck-builder">
       <div className="db-header">
-        <h1 style={{ marginBottom: 0 }}>Deck Builder</h1>
+        <div>
+          <div className="page-kicker">20 Card Loadout</div>
+          <h1 className="page-title" style={{ marginBottom: 0 }}>Deck Builder</h1>
+        </div>
         <div className="db-hero-tag">
           <span>{FACTIONS[hero!.faction]}</span> <span>·</span> <span>{ARCHETYPES[archetype]}</span> <span>·</span> <span>Lv {hero!.level}</span>
         </div>
+        <ArcanaRibbon variant={validation.ok ? "blue" : "red"}>{validation.filled} / {DECK_SIZE}</ArcanaRibbon>
       </div>
 
       <div className="db-toolbar">
@@ -187,7 +197,7 @@ export default function DeckBuilder() {
           onChange={(e) => setDeckName(e.target.value)}
           placeholder="Deck name"
         />
-        <button onClick={onSave}>Save</button>
+        <ArcanaButton variant="blue" size="sm" onClick={onSave}>Save</ArcanaButton>
         <button className="btn-outline" onClick={onClear}>Clear</button>
         {savedDecks.length > 0 && (
           <select
@@ -202,7 +212,7 @@ export default function DeckBuilder() {
           </select>
         )}
         {statusMsg && <span className="msg-info">{statusMsg}</span>}
-        <span style={{ marginLeft: "auto", color: validation.ok ? "var(--success)" : "var(--text-muted)" }}>
+        <span style={{ marginLeft: "auto", color: validation.ok ? "#78c679" : "var(--color-text-dim)" }}>
           {validation.filled} / {DECK_SIZE} {validation.ok && "· valid"}
         </span>
       </div>

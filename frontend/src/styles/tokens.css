@@ -1,0 +1,91 @@
+@font-face {
+  font-family: 'Patrick Hand';
+  src: url('/assets/fonts/PatrickHand-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* --- Palette (extracted from UI assets) --- */
+  --color-ink: #161C2E;
+  --color-bg: #0A0A12;
+  --color-surface: #272B38;
+
+  --color-parchment: #EEE1C6;
+  --color-parchment-dark: #E2D0C2;
+  --color-slate: #515A65;
+  --color-gold: #DDB36D;
+  --color-gold-dim: #9D7455;
+
+  --color-blue: #8CC3C4;
+  --color-blue-pressed: #8AA3AB;
+  --color-red: #BB6164;
+  --color-red-pressed: #9A6879;
+  --color-red-bright: #FF3E3E;
+
+  --color-wood: #9F6B55;
+  --color-wood-dark: #7A6F65;
+  --color-carved: #CCB88D;
+  --color-bar-wood: #DFA166;
+
+  --color-text: #E1D4BD;
+  --color-text-dim: #9B9FA9;
+  --color-text-dark: #2A2420;
+  --color-hover: #EDD76F;
+
+  /* --- Spacing (4px base) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* --- Typography --- */
+  --font-display: 'Patrick Hand', cursive;
+  --font-body: 'Patrick Hand', cursive;
+  --font-mono: 'Courier New', monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 40px;
+
+  /* --- Borders --- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --border-thin: 1px;
+  --border-med: 2px;
+  --border-thick: 3px;
+
+  /* --- Shadows --- */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow-gold: 0 0 12px rgba(221, 179, 109, 0.4);
+  --shadow-glow-blue: 0 0 12px rgba(140, 195, 196, 0.4);
+
+  /* --- Transitions --- */
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 400ms;
+
+  /* --- Z-index scale --- */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-tooltip: 300;
+  --z-notification: 400;
+
+  /* --- Opacity --- */
+  --opacity-disabled: 0.5;
+  --opacity-hover: 0.8;
+}

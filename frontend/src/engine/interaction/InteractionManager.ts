@@ -2,7 +2,6 @@ import { InteractionEvent, EVENT_PHASE } from './InteractionEvent.js';
 import { Pool } from '../utils/Pool.js';
 import type { Camera } from '../camera/Camera.js';
 
-/** Minimal shape of a scene-graph node needed by InteractionManager. */
 export interface InteractiveNode {
   visible: boolean;
   interactive: boolean;
@@ -31,6 +30,7 @@ export class InteractionManager {
   private _camera: Camera;
   private _hovered: InteractiveNode | null;
   private _pressedTarget: InteractiveNode | null;
+  private _boundListeners: boolean;
 
   private _onPointerDown: (e: PointerEvent) => void;
   private _onPointerUp: (e: PointerEvent) => void;
@@ -38,12 +38,13 @@ export class InteractionManager {
   private _onWheel: (e: WheelEvent) => void;
   private _onPointerLeave: (e: PointerEvent) => void;
 
-  constructor(canvas: HTMLCanvasElement, stage: InteractiveNode, camera: Camera) {
+  constructor(canvas: HTMLCanvasElement, stage: InteractiveNode, camera: Camera, autoBindDOM = true) {
     this._canvas = canvas;
     this._stage = stage;
     this._camera = camera;
     this._hovered = null;
     this._pressedTarget = null;
+    this._boundListeners = false;
 
     this._onPointerDown = this._handlePointerDown.bind(this);
     this._onPointerUp = this._handlePointerUp.bind(this);
@@ -51,12 +52,36 @@ export class InteractionManager {
     this._onWheel = this._handleWheel.bind(this);
     this._onPointerLeave = this._handlePointerLeave.bind(this);
 
-    canvas.addEventListener('pointerdown', this._onPointerDown);
-    canvas.addEventListener('pointerup', this._onPointerUp);
-    canvas.addEventListener('pointermove', this._onPointerMove);
-    canvas.addEventListener('pointerleave', this._onPointerLeave);
-    canvas.addEventListener('wheel', this._onWheel, { passive: false });
+    if (autoBindDOM) {
+      this.bindDOM();
+    }
   }
+
+  bindDOM(): void {
+    if (this._boundListeners) return;
+    this._boundListeners = true;
+    this._canvas.addEventListener('pointerdown', this._onPointerDown);
+    this._canvas.addEventListener('pointerup', this._onPointerUp);
+    this._canvas.addEventListener('pointermove', this._onPointerMove);
+    this._canvas.addEventListener('pointerleave', this._onPointerLeave);
+    this._canvas.addEventListener('wheel', this._onWheel, { passive: false });
+  }
+
+  unbindDOM(): void {
+    if (!this._boundListeners) return;
+    this._boundListeners = false;
+    this._canvas.removeEventListener('pointerdown', this._onPointerDown);
+    this._canvas.removeEventListener('pointerup', this._onPointerUp);
+    this._canvas.removeEventListener('pointermove', this._onPointerMove);
+    this._canvas.removeEventListener('pointerleave', this._onPointerLeave);
+    this._canvas.removeEventListener('wheel', this._onWheel);
+  }
+
+  feedPointerDown(e: PointerEvent): void { this._handlePointerDown(e); }
+  feedPointerUp(e: PointerEvent): void { this._handlePointerUp(e); }
+  feedPointerMove(e: PointerEvent): void { this._handlePointerMove(e); }
+  feedPointerLeave(e: PointerEvent): void { this._handlePointerLeave(e); }
+  feedWheel(e: WheelEvent): void { this._handleWheel(e); }
 
   private _createEvent(
     type: string,
@@ -92,7 +117,7 @@ export class InteractionManager {
     return { screenX: cssX, screenY: cssY, worldX: world.x, worldY: world.y };
   }
 
-  private _hitTest(node: InteractiveNode, worldX: number, worldY: number): InteractiveNode | null {
+  _hitTest(node: InteractiveNode, worldX: number, worldY: number): InteractiveNode | null {
     if (!node.visible) return null;
 
     for (let i = node.children.length - 1; i >= 0; i--) {
@@ -107,7 +132,7 @@ export class InteractionManager {
     return null;
   }
 
-  private _propagate(event: InteractionEvent, target: InteractiveNode): void {
+  _propagate(event: InteractionEvent, target: InteractiveNode): void {
     const path: InteractiveNode[] = [];
     let node: InteractiveNode | null = target.parent;
     while (node) {
@@ -135,6 +160,16 @@ export class InteractionManager {
       event.currentTarget = path[i];
       path[i].emit(event.type, event);
     }
+  }
+
+  _createEvent_public(
+    type: string,
+    target: InteractiveNode | null,
+    worldX: number, worldY: number,
+    screenX: number, screenY: number,
+    domEvent: Event, button: number,
+  ): InteractionEvent {
+    return this._createEvent(type, target, worldX, worldY, screenX, screenY, domEvent, button);
   }
 
   private _handlePointerDown(domEvent: PointerEvent): void {
@@ -197,7 +232,11 @@ export class InteractionManager {
         target.emit('pointerover', overEvent);
       }
       this._hovered = target;
-      this._canvas.style.cursor = (target && target.cursor) ? target.cursor : '';
+      if (target && target.cursor) {
+        this._canvas.style.cursor = "url('/assets/ui/cursors/cursor_02.png') 24 18, pointer";
+      } else {
+        this._canvas.style.cursor = "url('/assets/ui/cursors/cursor_01.png') 24 18, auto";
+      }
     }
 
     if (target) {
@@ -233,15 +272,11 @@ export class InteractionManager {
       outEvent.currentTarget = this._hovered;
       this._hovered.emit('pointerout', outEvent);
       this._hovered = null;
-      this._canvas.style.cursor = '';
+      this._canvas.style.cursor = "url('/assets/ui/cursors/cursor_01.png') 24 18, auto";
     }
   }
 
   destroy(): void {
-    this._canvas.removeEventListener('pointerdown', this._onPointerDown);
-    this._canvas.removeEventListener('pointerup', this._onPointerUp);
-    this._canvas.removeEventListener('pointermove', this._onPointerMove);
-    this._canvas.removeEventListener('pointerleave', this._onPointerLeave);
-    this._canvas.removeEventListener('wheel', this._onWheel);
+    this.unbindDOM();
   }
 }

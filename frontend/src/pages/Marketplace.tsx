@@ -9,6 +9,7 @@ import {
 import { formatEther, parseEther } from "viem";
 import { CONTRACTS, ADDRESSES } from "../contracts";
 import { useOwnedCards } from "../hooks/useOwnedCards";
+import { ArcanaButton, ArcanaPanel, ArcanaRibbon } from "../ui/components/index";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 
@@ -149,76 +150,95 @@ export default function Marketplace() {
   };
 
   return (
-    <div className="page">
-      <h1>Marketplace</h1>
+    <div className="page page-shell">
+      <div className="page-hero">
+        <div>
+          <div className="page-kicker">Escrow Trading</div>
+          <h1 className="page-title">Marketplace</h1>
+          <p className="page-copy">
+            Browse active listings, buy cards from other players, or list spare cards from your collection.
+          </p>
+        </div>
+        <ArcanaRibbon variant="yellow">{listings.length} Active Listings</ArcanaRibbon>
+      </div>
 
       {txInProgress && (
-        <p className="msg-info" style={{ marginTop: "0.5rem" }}>
+        <p className="msg-info">
           {isPending ? "Confirm in wallet..." : "Confirming transaction..."}
         </p>
       )}
       {isSuccess && !txInProgress && (
-        <p className="msg-success" style={{ marginTop: "0.5rem" }}>Transaction confirmed.</p>
+        <p className="msg-success">Transaction confirmed.</p>
       )}
       {error && (
-        <p className="msg-error" style={{ marginTop: "0.5rem" }}>{error.message.slice(0, 160)}</p>
+        <p className="msg-error">{error.message.slice(0, 160)}</p>
       )}
 
-      <h2 style={{ fontSize: "1.1rem", marginTop: "1.5rem", marginBottom: "0.75rem" }}>
-        Listings <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>({otherListings.length})</span>
-      </h2>
-      {otherListings.length === 0 ? (
-        <p className="msg-info">No active listings.</p>
-      ) : (
-        <div className="card-grid">
-          {otherListings.map((l) => (
-            <ListingCard
-              key={l.tokenId.toString()}
-              listing={l}
-              actionLabel={`Buy ${formatEther(l.priceWei)} ETH`}
-              onAction={() => handleBuy(l.tokenId, l.priceWei)}
-              disabled={txInProgress}
-            />
-          ))}
+      <section>
+        <div className="section-title">
+          <h2>Listings</h2>
+          <span className="msg-info">{otherListings.length} available</span>
         </div>
-      )}
+        {otherListings.length === 0 ? (
+          <div className="soft-panel"><p className="msg-info">No active listings.</p></div>
+        ) : (
+          <div className="card-grid">
+            {otherListings.map((l) => (
+              <ListingCard
+                key={l.tokenId.toString()}
+                listing={l}
+                actionLabel={`Buy ${formatEther(l.priceWei)} ETH`}
+                onAction={() => handleBuy(l.tokenId, l.priceWei)}
+                disabled={txInProgress}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-      <h2 style={{ fontSize: "1.1rem", marginTop: "2rem", marginBottom: "0.75rem" }}>
-        My Listings <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>({myListings.length})</span>
-      </h2>
-      {myListings.length === 0 ? (
-        <p className="msg-info">You have no active listings.</p>
-      ) : (
-        <div className="card-grid">
-          {myListings.map((l) => (
-            <ListingCard
-              key={l.tokenId.toString()}
-              listing={l}
-              actionLabel={`Cancel (${formatEther(l.priceWei)} ETH)`}
-              onAction={() => handleCancel(l.tokenId)}
-              disabled={txInProgress}
-            />
-          ))}
+      <section>
+        <div className="section-title">
+          <h2>My Listings</h2>
+          <span className="msg-info">{myListings.length} listed</span>
         </div>
-      )}
+        {myListings.length === 0 ? (
+          <div className="soft-panel"><p className="msg-info">You have no active listings.</p></div>
+        ) : (
+          <div className="card-grid">
+            {myListings.map((l) => (
+              <ListingCard
+                key={l.tokenId.toString()}
+                listing={l}
+                actionLabel={`Cancel (${formatEther(l.priceWei)} ETH)`}
+                onAction={() => handleCancel(l.tokenId)}
+                disabled={txInProgress}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-      <h2 style={{ fontSize: "1.1rem", marginTop: "2rem", marginBottom: "0.75rem" }}>List a Card</h2>
+      <section className="soft-panel">
+        <div className="section-title">
+          <h2>List a Card</h2>
+          <span className="msg-info">{unlistedOwned.length} unlisted owned</span>
+        </div>
       {!isApprovedForAll ? (
-        <div className="card" style={{ maxWidth: 480 }}>
-          <p style={{ fontSize: "0.9rem", marginBottom: "0.75rem" }}>
+        <div className="market-form">
+          <p className="msg-info">
             Approve the marketplace once. Listing transfers the card into escrow until sold or cancelled,
             so it can't be used in a deck while listed.
           </p>
-          <button onClick={handleApproveAll} disabled={txInProgress}>
+          <ArcanaButton variant="blue" onClick={handleApproveAll} disabled={txInProgress}>
             {txInProgress ? "Working..." : "Approve Marketplace"}
-          </button>
+          </ArcanaButton>
         </div>
       ) : unlistedOwned.length === 0 ? (
         <p className="msg-info">No unlisted cards in your collection.</p>
       ) : (
-        <div className="card" style={{ maxWidth: 480 }}>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Select card</p>
-          <div className="btn-group" style={{ marginBottom: "0.75rem", flexWrap: "wrap" }}>
+        <div className="market-form">
+          <label className="field-label">Select card</label>
+          <div className="pill-row">
             {unlistedOwned.map((c) => (
               <button
                 key={c.tokenId.toString()}
@@ -229,33 +249,26 @@ export default function Marketplace() {
               </button>
             ))}
           </div>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Price (ETH)</p>
+          <label className="field-label">Price (ETH)</label>
           <input
+            className="text-input"
             type="text"
             inputMode="decimal"
             value={priceEth}
             onChange={(e) => setPriceEth(e.target.value)}
             placeholder="0.01"
-            style={{
-              width: "100%",
-              padding: "0.5rem",
-              marginBottom: "0.75rem",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: 4,
-              color: "var(--text)",
-              fontSize: "0.95rem",
-            }}
           />
-          <button
-            className="btn-large"
+          <ArcanaButton
+            variant="blue"
+            size="lg"
             onClick={handleList}
             disabled={selectedTokenId === null || !priceEth || txInProgress}
           >
             List Card
-          </button>
+          </ArcanaButton>
         </div>
       )}
+      </section>
     </div>
   );
 }
@@ -272,26 +285,22 @@ function ListingCard({
   disabled: boolean;
 }) {
   return (
-    <div className="card" style={{ padding: "0.5rem", textAlign: "center" }}>
-      {listing.metadata?.image ? (
-        <object
-          data={listing.metadata.image}
-          type="image/svg+xml"
-          style={{ width: "100%", borderRadius: 4, minHeight: 200 }}
-        >
-          <p style={{ color: "var(--text-muted)" }}>Card image</p>
-        </object>
-      ) : (
-        <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
-          No image
-        </div>
-      )}
-      <p style={{ marginTop: "0.5rem", fontSize: "0.85rem", fontWeight: 600 }}>
-        {listing.metadata?.name ?? `Card #${listing.tokenId.toString()}`}
-      </p>
-      <button onClick={onAction} disabled={disabled} style={{ marginTop: "0.5rem", width: "100%" }}>
-        {actionLabel}
-      </button>
-    </div>
+    <ArcanaPanel variant="slate" className="listing-card">
+      <div className="listing-card-body">
+        {listing.metadata?.image ? (
+          <object data={listing.metadata.image} type="image/svg+xml" className="card-media">
+            <p className="msg-info">Card image</p>
+          </object>
+        ) : (
+          <div className="card-media" style={{ display: "grid", placeItems: "center" }}>
+            <span className="msg-info">No image</span>
+          </div>
+        )}
+        <strong>{listing.metadata?.name ?? `Card #${listing.tokenId.toString()}`}</strong>
+        <ArcanaButton variant="blue" size="sm" onClick={onAction} disabled={disabled}>
+          {actionLabel}
+        </ArcanaButton>
+      </div>
+    </ArcanaPanel>
   );
 }
