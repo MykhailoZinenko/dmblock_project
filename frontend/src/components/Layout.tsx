@@ -23,11 +23,9 @@ export default function Layout() {
               <button onClick={() => disconnect()}>Disconnect</button>
             </>
           ) : (
-            connectors.map((c) => (
-              <button key={c.uid} onClick={() => connect({ connector: c })}>
-                Connect
-              </button>
-            ))
+            <button onClick={() => connect({ connector: connectors[0] })}>
+              Connect Wallet
+            </button>
           )}
         </div>
       </nav>
