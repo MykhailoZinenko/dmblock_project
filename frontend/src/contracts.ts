@@ -1,17 +1,20 @@
 import { GameConfigAbi } from "./abi/GameConfig";
 import { CardNFTAbi } from "./abi/CardNFT";
 import { HeroNFTAbi } from "./abi/HeroNFT";
+import { MarketplaceAbi } from "./abi/Marketplace";
 
 export const ADDRESSES = {
   gameConfig: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
   cardNFT: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
   heroNFT: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+  marketplace: "0x0000000000000000000000000000000000000000",
 } as const;
 
 export const CONTRACTS = {
   gameConfig: { address: ADDRESSES.gameConfig, abi: GameConfigAbi },
   cardNFT: { address: ADDRESSES.cardNFT, abi: CardNFTAbi },
   heroNFT: { address: ADDRESSES.heroNFT, abi: HeroNFTAbi },
+  marketplace: { address: ADDRESSES.marketplace, abi: MarketplaceAbi },
 } as const;
 
 export const FACTIONS = ["Castle", "Inferno", "Necropolis", "Dungeon"] as const;

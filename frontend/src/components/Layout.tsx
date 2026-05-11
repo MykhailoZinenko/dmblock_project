@@ -14,6 +14,7 @@ export default function Layout() {
           <Link to="/">Home</Link>
           <Link to="/collection">Collection</Link>
           <Link to="/hero">Hero</Link>
+          <Link to="/marketplace">Marketplace</Link>
         </div>
         <div className="nav-wallet">
           {isConnected ? (

@@ -7,7 +7,7 @@ const CONTRACTS_OUT = join(__dirname, "../../contracts/out");
 const ABI_DIR = join(__dirname, "../src/abi");
 
 // Add contract names here as the project grows
-const CONTRACTS = ["HelloWorld", "GameConfig", "CardNFT", "HeroNFT"];
+const CONTRACTS = ["HelloWorld", "GameConfig", "CardNFT", "HeroNFT", "Marketplace"];
 
 mkdirSync(ABI_DIR, { recursive: true });
 
