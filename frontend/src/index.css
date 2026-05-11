@@ -7,6 +7,11 @@ body {
   font-size: var(--text-md);
   line-height: 1.5;
   min-height: 100vh;
+  overflow-y: auto;
+}
+
+a, button, [role="button"], input, select, textarea {
+  cursor: url('/assets/ui/cursors/cursor_02.png') 24 18, pointer;
 }
 
 .app {

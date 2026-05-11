@@ -50,21 +50,21 @@ export default function Home() {
       <ArcanaRibbon variant="blue">Welcome Back</ArcanaRibbon>
       {hero && (
         <ArcanaPanel variant="parchment" style={{ maxWidth: 380, marginTop: "var(--space-5)" }}>
-          <div style={{ padding: "var(--space-4)" }}>
+          <div style={{ padding: "var(--space-4)", color: "var(--color-text-dark)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-3)" }}>
               <span style={{ color: FACTION_COLORS[hero.faction], fontWeight: 600, fontFamily: "var(--font-display)", fontSize: "var(--text-lg)" }}>
                 {FACTIONS[hero.faction]}
               </span>
-              <span style={{ color: "var(--color-text-dim)" }}>{ARCHETYPES[hero.archetype]}</span>
+              <span style={{ color: "var(--color-slate)" }}>{ARCHETYPES[hero.archetype]}</span>
             </div>
 
             <ArcanaBar value={hero.level} max={50} color="gold">Level {hero.level} / 50</ArcanaBar>
 
             <div style={{ marginTop: "var(--space-3)" }}>
-              <div className="stat-row"><span className="stat-label">Attack</span><span className="stat-value">{hero.attack}</span></div>
-              <div className="stat-row"><span className="stat-label">Defense</span><span className="stat-value">{hero.defense}</span></div>
-              <div className="stat-row"><span className="stat-label">Spell Power</span><span className="stat-value">{hero.spellPower}</span></div>
-              <div className="stat-row"><span className="stat-label">Knowledge</span><span className="stat-value">{hero.knowledge}</span></div>
+              <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Attack</span><span style={{ fontWeight: 700 }}>{hero.attack}</span></div>
+              <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Defense</span><span style={{ fontWeight: 700 }}>{hero.defense}</span></div>
+              <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Spell Power</span><span style={{ fontWeight: 700 }}>{hero.spellPower}</span></div>
+              <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Knowledge</span><span style={{ fontWeight: 700 }}>{hero.knowledge}</span></div>
             </div>
 
             <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>

@@ -44,6 +44,7 @@ export default function HeroProfile() {
   }
 
   const canLevelUp = hero.level < 50;
+  const dark = "var(--color-text-dark)";
 
   const handleLevelUp = () => {
     if (selectedStat === null || selectedTrait === null) return;
@@ -62,79 +63,76 @@ export default function HeroProfile() {
         {ARCHETYPES[hero.archetype]}
       </ArcanaRibbon>
 
-      <ArcanaPanel variant="parchment" style={{ maxWidth: 400, marginTop: "var(--space-5)" }}>
-        <div style={{ padding: "var(--space-4)" }}>
+      <ArcanaPanel variant="parchment" style={{ maxWidth: 440, marginTop: "var(--space-5)" }}>
+        <div style={{ padding: "var(--space-4)", color: dark }}>
           <ArcanaBar value={hero.level} max={50} color="gold">Level {hero.level} / 50</ArcanaBar>
+
           <div style={{ marginTop: "var(--space-3)" }}>
-            <div className="stat-row"><span className="stat-label">Attack</span><span className="stat-value">{hero.attack}</span></div>
-            <div className="stat-row"><span className="stat-label">Defense</span><span className="stat-value">{hero.defense}</span></div>
-            <div className="stat-row"><span className="stat-label">Spell Power</span><span className="stat-value">{hero.spellPower}</span></div>
-            <div className="stat-row"><span className="stat-label">Knowledge</span><span className="stat-value">{hero.knowledge}</span></div>
+            <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Attack</span><span style={{ fontWeight: 700 }}>{hero.attack}</span></div>
+            <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Defense</span><span style={{ fontWeight: 700 }}>{hero.defense}</span></div>
+            <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Spell Power</span><span style={{ fontWeight: 700 }}>{hero.spellPower}</span></div>
+            <div className="stat-row"><span style={{ color: "var(--color-slate)" }}>Knowledge</span><span style={{ fontWeight: 700 }}>{hero.knowledge}</span></div>
           </div>
+
+          {traits && traits[0].length > 0 && (
+            <div style={{ marginTop: "var(--space-4)", borderTop: "1px solid var(--color-parchment-dark)", paddingTop: "var(--space-3)" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", marginBottom: "var(--space-2)" }}>Traits</div>
+              {traits[0].map((traitId: number, i: number) => (
+                <div className="stat-row" key={traitId}>
+                  <span style={{ color: "var(--color-slate)" }}>{TRAIT_NAMES[traitId] ?? `Trait ${traitId}`}</span>
+                  <span style={{ fontWeight: 700 }}>Lv {traits[1][i]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canLevelUp && traitOptions && (
+            <div style={{ marginTop: "var(--space-4)", borderTop: "1px solid var(--color-parchment-dark)", paddingTop: "var(--space-3)" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", marginBottom: "var(--space-3)" }}>Level Up</div>
+
+              <div style={{ fontSize: "var(--text-sm)", color: "var(--color-slate)", marginBottom: "var(--space-2)" }}>Choose +1 stat:</div>
+              <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", marginBottom: "var(--space-4)" }}>
+                {STAT_LABELS.map((label, i) => (
+                  <ArcanaButton
+                    key={i}
+                    variant={selectedStat === i ? "blue" : "red"}
+                    size="sm"
+                    onClick={() => setSelectedStat(i)}
+                  >
+                    {label}
+                  </ArcanaButton>
+                ))}
+              </div>
+
+              <div style={{ fontSize: "var(--text-sm)", color: "var(--color-slate)", marginBottom: "var(--space-2)" }}>Choose trait:</div>
+              <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
+                {[traitOptions[0], traitOptions[1]].map((traitId) => (
+                  <ArcanaButton
+                    key={traitId}
+                    variant={selectedTrait === traitId ? "blue" : "red"}
+                    size="sm"
+                    onClick={() => setSelectedTrait(traitId)}
+                  >
+                    {TRAIT_NAMES[traitId] ?? `Trait ${traitId}`}
+                  </ArcanaButton>
+                ))}
+              </div>
+
+              <ArcanaButton
+                variant="blue"
+                size="lg"
+                onClick={handleLevelUp}
+                disabled={selectedStat === null || selectedTrait === null || isPending || isConfirming}
+              >
+                {isPending ? "Confirm in wallet..." : isConfirming ? "Leveling up..." : "Level Up"}
+              </ArcanaButton>
+
+              {isSuccess && <p style={{ marginTop: "var(--space-2)", color: "#2e7d32" }}>Leveled up!</p>}
+              {error && <p style={{ marginTop: "var(--space-2)", color: "var(--color-red-bright)" }}>{error.message.slice(0, 120)}</p>}
+            </div>
+          )}
         </div>
       </ArcanaPanel>
-
-      {traits && traits[0].length > 0 && (
-        <ArcanaPanel variant="slate" style={{ maxWidth: 400, marginTop: "var(--space-4)" }}>
-          <div style={{ padding: "var(--space-4)" }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", color: "var(--color-gold)", marginBottom: "var(--space-2)" }}>Traits</div>
-            {traits[0].map((traitId: number, i: number) => (
-              <div className="stat-row" key={traitId}>
-                <span className="stat-label">{TRAIT_NAMES[traitId] ?? `Trait ${traitId}`}</span>
-                <span className="stat-value">Lv {traits[1][i]}</span>
-              </div>
-            ))}
-          </div>
-        </ArcanaPanel>
-      )}
-
-      {canLevelUp && traitOptions && (
-        <ArcanaPanel variant="wood" style={{ maxWidth: 440, marginTop: "var(--space-4)" }}>
-          <div style={{ padding: "var(--space-4)" }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", color: "var(--color-gold)", marginBottom: "var(--space-3)" }}>Level Up</div>
-
-            <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)", marginBottom: "var(--space-2)" }}>Choose +1 stat:</div>
-            <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", marginBottom: "var(--space-4)" }}>
-              {STAT_LABELS.map((label, i) => (
-                <ArcanaButton
-                  key={i}
-                  variant={selectedStat === i ? "blue" : "red"}
-                  size="sm"
-                  onClick={() => setSelectedStat(i)}
-                >
-                  {label}
-                </ArcanaButton>
-              ))}
-            </div>
-
-            <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-dim)", marginBottom: "var(--space-2)" }}>Choose trait:</div>
-            <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
-              {[traitOptions[0], traitOptions[1]].map((traitId) => (
-                <ArcanaButton
-                  key={traitId}
-                  variant={selectedTrait === traitId ? "blue" : "red"}
-                  size="sm"
-                  onClick={() => setSelectedTrait(traitId)}
-                >
-                  {TRAIT_NAMES[traitId] ?? `Trait ${traitId}`}
-                </ArcanaButton>
-              ))}
-            </div>
-
-            <ArcanaButton
-              variant="blue"
-              size="lg"
-              onClick={handleLevelUp}
-              disabled={selectedStat === null || selectedTrait === null || isPending || isConfirming}
-            >
-              {isPending ? "Confirm in wallet..." : isConfirming ? "Leveling up..." : "Level Up"}
-            </ArcanaButton>
-
-            {isSuccess && <p className="msg-success" style={{ marginTop: "var(--space-2)" }}>Leveled up!</p>}
-            {error && <p className="msg-error" style={{ marginTop: "var(--space-2)" }}>{error.message.slice(0, 120)}</p>}
-          </div>
-        </ArcanaPanel>
-      )}
     </div>
   );
 }
