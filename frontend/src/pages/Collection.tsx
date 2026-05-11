@@ -24,11 +24,13 @@ export default function Collection() {
         {cards.map(({ tokenId, metadata }) => (
           <div key={tokenId.toString()} className="card" style={{ padding: "0.5rem", textAlign: "center" }}>
             {metadata?.image ? (
-              <img
-                src={metadata.image}
-                alt={metadata.name ?? `Card #${tokenId}`}
-                style={{ width: "100%", borderRadius: 4 }}
-              />
+              <object
+                data={metadata.image}
+                type="image/svg+xml"
+                style={{ width: "100%", borderRadius: 4, minHeight: 200 }}
+              >
+                <p style={{ color: "var(--text-muted)" }}>Card image</p>
+              </object>
             ) : (
               <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
                 No image
