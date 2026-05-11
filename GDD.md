@@ -1,5 +1,5 @@
 # Arcana Arena
-## Game Design Document v2.1
+## Game Design Document v3.0 — Simplified Core
 
 ---
 
@@ -19,7 +19,7 @@ The promise of freedom drives every prisoner. Those who rise to the top of the l
 Dark fantasy. Gritty. Medieval. Morally ambiguous. The players are not heroes by choice.
 
 ## 1.4 Setting
-The arena is a stone floor divided into a 6×8 tactical grid. Prisoners are chained at diagonal corners off the grid. The barrier glows faintly above. Spectators — nobles, merchants, the Wises — watch from above.
+The arena is a stone floor with a hex-grid battlefield. Prisoners are chained at opposite edges. The barrier glows faintly above. Spectators — nobles, merchants, the Wises — watch from above.
 
 ---
 
@@ -60,17 +60,8 @@ Game stats live in an upgradeable contract separate from NFT ownership. The foll
 
 Each faction has 6–8 unique units. Faction does not restrict card ownership or deck building — it defines hero origin and starting traits only.
 
-## 3.2 Spell Schools
-| School | Theme |
-|---|---|
-| Fire | Damage, burning, area destruction |
-| Earth | Armor, slow, petrify, control |
-| Water | Freeze, heal, ice damage |
-| Air | Speed, lightning, haste, teleport |
-| Dark | Curse, drain life, fear, raise dead |
-| Light | Bless, heal, resurrect, purify |
-
-Balance achieved through card design and per-unit immunities — not blanket faction modifiers.
+## 3.2 Magic
+Spells are generic — no spell school system. Spells are defined by their effect (damage, heal, buff, debuff) and stats (spell power, duration, target type, mana cost, success chance). Balance achieved through card design — not school or faction modifiers.
 
 ---
 
@@ -177,48 +168,21 @@ Each faction × archetype combination grants one specific starting trait defined
 | Damage Reduction | Flat % reduction from all incoming damage | +3% per level, cap 30% |
 | Vitality | Increases unit max HP | +5% HP bonus per level, cap 50% |
 
-## 5.3 Magic Traits (max level 10, school traits max level 5)
+## 5.3 Magic Traits (max level 10)
 | Trait | Effect | Scaling |
 |---|---|---|
 | Wisdom | Reduces spell failure chance | -2% failure per level, minimum 1% |
 | Spell Focus | Increases spell power consistency | +2% effective spell power per level |
-| Fire Magic | Boosts Fire school spells | -1 mana cost per 2 levels, +5% dmg per level, full AOE at level 5 |
-| Earth Magic | Same structure as Fire Magic | — |
-| Water Magic | Same structure as Fire Magic | — |
-| Air Magic | Same structure as Fire Magic | — |
-| Dark Magic | Same structure as Fire Magic | — |
-| Light Magic | Same structure as Fire Magic | — |
+| Arcane Mastery | Boosts all spells | -1 mana cost per 2 levels, +5% dmg per level |
 
-## 5.4 Tactical Traits (max level 5, require unit action — unit skips its activation)
-| Trait | Effect | Scaling | Cooldown |
-|---|---|---|---|
-| Initiative Boost | +initiative to chosen friendly unit | +1 initiative per level | 1 per turn |
-| Initiative Suppression | -initiative to chosen enemy unit | -1 initiative per level | 1 per turn |
-| Movement Boost | +speed to chosen friendly unit | +1 speed per 2 levels | 1 per turn |
-| First Aid | Heal chosen friendly unit | See formula below | 4 turns static |
-| Hand Revelation | Reveals info about random enemy hand card | L1: type only, L2: faction/school, L3: full info | 1 per turn |
-| Tactics | Unlocks extra deployment columns | +2 cells (1 each side) expanding from center per level, max level 3 = full row 3 | Passive |
-
-**First Aid formula:**
-```
-healAmount = 3 × (1 + hero.spellPower × (0.1 + traitLevel × 0.1))
-actualHeal = min(healAmount, unit.maxHP - unit.currentHP)
-cooldown = 4 turns (static, never changes)
-```
-
-## 5.5 Passive Traits (max level 5)
+## 5.4 Passive Traits (max level 5)
 | Trait | Effect | Scaling |
 |---|---|---|
 | Mana Growth | Increases mana gained per turn | +1 mana per 2 levels |
 | Last Stand | Stat bonus when hero HP is low | +5% all unit stats per level when hero HP < 30% |
 | Momentum Scaling | Bonus after kills | +2% attack per kill per level, resets each turn |
 
-## 5.6 Tactical Trait Rules
-- Using a tactical trait = unit spends its activation (unit action skipped)
-- Maximum 1 tactical trait use per full turn across all units
-- Unit ability cooldowns tracked per unit instance in match state
-- Player/tactical trait cooldowns tracked per player in match state
-- No trait or ability reduces cooldowns unless explicitly stated on card
+*Note: Tactical traits (hero abilities that consume unit activations) removed in v3.0 simplification. May be reintroduced in future versions.*
 
 ---
 
@@ -252,97 +216,52 @@ cooldown = 4 turns (static, never changes)
 | HP | Base hit points |
 | Initiative | Turn order priority (higher = sooner) |
 | Speed | Maximum action points per activation |
-| Ammo | Ranged shots (0 = no ranged capability) |
+| Ammo | Ranged shots (0 = melee only) |
 | Mana Cost | Mana required to deploy |
-| Size | 1 = 1×1 cell, 2 = 2×2 cells (position = top-left cell of block) |
+| Size | 1 = 1×1 cell, 2 = 2×2 cells |
 | Magic Resistance | % flat reduction to all incoming spell damage |
-| School Immunity | Bitmask: immune to specific spell schools |
-| Effect Immunity | Bitmask: immune to specific spell effects |
-| Abilities | Array of Ability structs |
 | Rarity | Common / Rare / Epic / Legendary |
 | Faction | Castle / Inferno / Necropolis / Dungeon |
+
+*Note: School immunity, effect immunity, and unit abilities removed in v3.0 simplification. Fields remain in contract structs (zeroed) for future use.*
 
 ## 6.3 Spell Card Stats
 | Stat | Description |
 |---|---|
 | Spell Power | Base effectiveness (damage / heal / scaling) |
 | Duration | Turns the effect lasts (0 = instant) |
-| Target Type | SINGLE / ALL_ENEMIES / ALL_ALLIES / AREA_NxM / HERO |
+| Target Type | SINGLE / ALL_ENEMIES / ALL_ALLIES / AREA / HERO |
 | Mana Cost | Mana required to cast |
 | Success Chance | Base % chance to succeed (failure cap 5–10%) |
-| School | Fire / Earth / Water / Air / Dark / Light |
+
+*Note: Spell school field removed in v3.0 — all spells are generic.*
 
 ## 6.4 Spell Failure
 - Base failure chance: 5–10% cap for normal spells
 - Stronger spells may have slightly higher base failure, still capped
 - Wisdom trait reduces failure chance (minimum 1% always)
-- On failure: game copy consumed, mana spent, no effect, NFT unaffected
+- On failure: spell burned (sent to graveyard permanently), mana spent, no effect, NFT unaffected
+- On success: spell resolves, then returns to bottom of owner's deck for future redraw
 - Lore: arcana stamp interferes with cast
 
-## 6.5 Ability Struct
-```
-struct Ability {
-    uint8  abilityType     // DAMAGE, HEAL, BUFF, DEBUFF, PASSIVE, SUMMON
-    uint8  triggerType     // ON_ATTACK, ON_HIT, ON_DEATH, ON_TURN_START, ACTIVE
-    uint8  targetType      // SELF, SINGLE_ENEMY, SINGLE_ALLY, ALL_ENEMIES, ALL_ALLIES, AREA
-    int16  value           // damage, heal, or stat modifier value
-    uint8  cooldown        // turns between uses (0 = passive)
-    string aoeShape        // "NxM" width × depth, empty if not AOE
-    uint8  schoolType      // 0 = physical, 1–6 = spell school
-}
-```
+## 6.5 Status Effects (deferred — implemented last)
 
-**schoolType on unit abilities:** A unit ability with a spell school (1–6) is treated as that school for all purposes — it triggers the corresponding School Magic trait bonuses and is blocked by the target's school immunity for that school. Physical (0) abilities are unaffected by spell school mechanics.
-
-## 6.6 Immunity Bitmasks
-
-**School Immunity (uint8):**
-```
-bit 0 = Fire
-bit 1 = Earth
-bit 2 = Water
-bit 3 = Air
-bit 4 = Dark
-bit 5 = Light
-```
-
-**Effect Immunity (uint32):**
-```
-bit 0  = BLIND
-bit 1  = FEAR
-bit 2  = SLOW
-bit 3  = FREEZE
-bit 4  = POISON
-bit 5  = BURN
-bit 6  = CURSE
-bit 7  = SILENCE
-bit 8  = ROOTS
-bit 9  = CONFUSION
-// expandable
-```
-
-## 6.7 Status Effect Definitions
+Status effects are applied by spells. No immunity system — all units can be affected by all effects.
 
 | Effect | Mechanic |
 |---|---|
-| BLIND | Unit completely skips activation |
-| FEAR | Each turn, unit steps 1 cell back in depth (away from enemy) |
 | SLOW | Reduces unit Speed by effect value |
-| FREEZE | Unit skips activation + takes ice damage |
 | POISON | Deals damage at start of unit activation |
-| BURN | Deals fire damage at start of unit activation |
-| CURSE | Reduces unit stats by effect value |
-| SILENCE | Unit cannot cast its abilities |
-| ROOTS | Unit cannot move; can still attack and cast non-movement abilities |
-| CONFUSION | Affects ranged units only — unit cannot shoot (forgets how to use ranged attack) |
+| BURN | Deals damage at start of unit activation |
+| ROOTS | Unit cannot move; can still attack |
+| BLIND | Unit completely skips activation |
+| FREEZE | Unit skips activation + takes damage |
 
-## 6.8 Spell Restrictions
-Spells cannot target units with specific immunity flags:
-```
-uint32 forbiddenTargetEffectImmunity
-// if target has this immunity bit set, spell cannot be cast on it
-// Example: Light healing spell forbidden on units with UNDEAD flag
-```
+- Duration effects tick at start of affected unit's activation
+- Casting same effect on same target replaces existing duration (not stacked)
+- Unit death removes all active effects
+
+*Note: Ability structs, school/effect immunities, spell restrictions, FEAR, CURSE, SILENCE, CONFUSION removed in v3.0 simplification. Contract structs retain these fields (zeroed) for future use.*
 
 ## 6.9 Base Stat Ranges by Rarity (rough estimates)
 | Rarity | Attack | HP | Defense |
@@ -354,38 +273,19 @@ uint32 forbiddenTargetEffectImmunity
 
 ## 6.10 Card Set Size
 - 4 factions × 6–8 units = 24–32 unit cards
-- 6 schools × 3–4 spells = 18–24 spell cards
-- Total base set: 42–56 cards
+- 8–12 generic spells (damage, heal, buff, debuff)
+- Total base set: 32–44 cards
 
 ## 6.11 Graveyard
 - Cards played from hand enter the board as active game cards (unit model appears on grid)
 - When a unit dies its game card moves to the graveyard
-- Spell cards move to graveyard immediately after resolution (success or failure)
+- **Spell recycling**: on successful resolution, spell card returns to the bottom of the owner's deck (not graveyard)
+- **Spell failure burn**: on failed resolution, spell card moves to graveyard permanently (burned for the match)
+- This applies universally — all players, all archetypes — but Mages benefit most due to higher spell count, SpellPower, and Wisdom investment
 - Graveyard is match-scoped only — no economic impact
-- NFTs never affected by graveyard mechanics
+- NFTs never affected by graveyard or burn mechanics
 
-**Resurrection rules:**
-- Resurrection spell targets any unit card in your graveyard
-- Resurrected unit returns to your hand (not directly to board)
-- Can only be deployed on the following turn (normal deployment rules apply)
-- Resurrected unit retains its ability cooldown state from when it died
-- A unit can be resurrected multiple times per match
-- HP on resurrection defined by the resurrection spell's spell power
-
-**Spell effect duration:**
-- Duration effects tick at the start of the affected unit's activation
-- Example: Blind applied this turn → unit skips its next activation → duration decrements
-- Casting same spell on same target replaces existing duration (not stacked)
-- Example: Slow (3 turns) cast turn 1, cast again turn 2 → 3 turns remaining, not 5
-- Unit death removes all active effects on that unit
-- Spell cast on a unit that dies before resolution: spell consumed, mana spent, no effect, no refund
-
-**Ability cooldowns:**
-- Cooldown starts immediately after ability is used
-- Counter decrements at end of each full turn
-- Unit abilities tracked per unit instance in match state
-- Player/tactical trait abilities tracked per player in match state
-- No trait reduces cooldowns unless explicitly stated on card
+*Note: Resurrection spells and ability cooldowns removed in v3.0 simplification.*
 
 ## 6.12 Snapshot Immutability
 - At match start a complete snapshot is taken: deck stats, hero stats, GameConfig values
@@ -420,20 +320,11 @@ uint32 forbiddenTargetEffectImmunity
 # 8. Battle System
 
 ## 8.1 Grid
-- **Dimensions**: 6 wide (columns 1–6) × 8 deep (rows 1–8)
-- **Coordinate system**: (column, row)
+- **Type**: Hex grid (exact dimensions TBD — user provides renderer)
 - **From each player's perspective they are always Player 1** — grid mirrors accordingly
-- **Hero positions** (off-grid):
-  - Player 1 hero: (1, 0) — bottom-left corner
-  - Player 2 hero: (6, 9) — top-right corner
-- **Player halves**: rows 1–4 = Player 1, rows 5–8 = Player 2
-- **Deployment zones**:
-  - Player 1: rows 1–2 by default
-  - Player 2: rows 7–8 by default
-  - Tactics trait expands from center outward:
-    - Level 1: center 2 cells of row 3 (columns 3–4)
-    - Level 2: 4 cells of row 3 (columns 2–5)
-    - Level 3: full row 3 (columns 1–6) — maximum level
+- **Hero positions**: off-grid at opposite edges
+- **Player halves**: grid split evenly between players
+- **Deployment zones**: first 2 rows on each player's side
 
 **Match ID:**
 ```
@@ -445,7 +336,7 @@ Seed for all in-game JS random events. Deterministic and agreed by both players 
 - **Starting hand**: 4 cards drawn at match start
 - **Per turn draw**: 1 card at end of each turn
 - **Maximum hand size**: 6 — if hand is full, drawn card is discarded
-- **Hand is private**: opponent cannot see it unless Hand Revelation trait reveals a card
+- **Hand is private**: opponent cannot see it
 
 ## 8.3 Mana
 - **Starting mana**: 5
@@ -471,19 +362,13 @@ Controlling player chooses ONE of:
 
   OPTION A — Unit Action:
     Spend action points (Speed value):
-    - Move: 1 point per cell (no diagonal)
+    - Move: 1 point per hex
     - Attack: consumes ALL remaining points (ends activation)
-    - Ability: consumes ALL remaining points (ends activation)
-    Can move then attack, or move then use ability, or just attack/ability in place
+    Can move then attack, or just attack in place
 
   OPTION B — Card Action (max 1 per full turn):
     Play 1 card (deploy unit OR cast spell) — costs mana
     → This unit SKIPS its action this turn
-
-  OPTION C — Hero Trait Skill:
-    Use one tactical trait ability
-    → This unit SKIPS its action this turn
-    → Subject to trait cooldown rules
 ↓
 After all units activated:
   Draw 1 card (discard if hand full)
@@ -493,35 +378,32 @@ After all units activated:
 **Zero units rule:**
 If a player has 0 units on board at turn start, before initiative order begins they receive 1 free action:
 - Play 1 card (deploy unit OR cast spell)
-- OR use 1 hero trait ability
 
 **Turn timer**: 45 seconds per unit activation. Failure to act triggers arcana stamp damage.
 
 ## 8.5 Movement & Action System
 Each unit has a Speed value = total action points per activation:
-- **Move**: 1 point per cell, no diagonal movement
+- **Move**: 1 point per hex
 - **Attack**: consumes ALL remaining points — always last action
-- **Ability**: consumes ALL remaining points — always last action
 
-Unit may move freely up to its speed, then attack or use ability. Once attack or ability used, activation ends. Units cannot pass through occupied cells. When a unit dies, its cell becomes vacant immediately.
+Unit may move freely up to its speed, then attack. Once attack is used, activation ends. Units cannot pass through occupied hexes. When a unit dies, its hex becomes vacant immediately.
 
 ## 8.6 Combat
 
 ### Melee Units (Ammo = 0)
-- Must be in adjacent cell to attack (including diagonal)
+- Must be in adjacent hex to attack
 - Always full effective damage regardless of grid position
-- Can reach hero when adjacent to grid edge at hero position
+- Can reach hero when adjacent to hero's off-grid position
 - Retaliation: target retaliates once per turn by default
 
 ### Ranged Units (Ammo > 0)
-- Can attack from any cell
+- Can attack from any hex
 - **Same half as target**: full damage
 - **Enemy half target**: damage × 0.5
-- **Blocked by adjacent enemy melee**: damage × 0.5, can only be attacked by melee
+- **Blocked by adjacent enemy melee**: damage × 0.5
 - Both conditions: damage × 0.25
 - Ammo decrements per shot — at 0 ammo unit can no longer shoot (does NOT become melee)
-- Standard ranged unit rules still apply at 0 ammo (blocking, half-damage penalties)
-- "Blocked" = enemy unit on adjacent or diagonal cell
+- "Blocked" = enemy unit on adjacent hex
 - Can attack hero directly once barrier down, any distance (while ammo > 0)
 
 ### Unit Size
@@ -535,15 +417,14 @@ Unit may move freely up to its speed, then attack or use ability. Once attack or
 
 ### Retaliation
 - Attacked unit retaliates once per turn by default
-- Disabled if: attacker has NO_RETALIATION ability, defender has ROOTS or relevant debuff, or card explicitly states no retaliation
+- Disabled if: defender has ROOTS effect
 
 ### AOE
 - By default all attacks and spells hit single target
-- AOE defined per card ability or spell:
+- AOE defined per spell's target type:
   - `ALL_ENEMIES` — all enemy units
   - `ALL_ALLIES` — all friendly units
-  - `AREA_NxM` — rectangle N wide × M deep centered on chosen cell
-  - School magic trait at max level (5) converts that school's spells to full AOE
+  - `AREA` — hexes around target hex
 
 ### Initiative Ties
 Same initiative → higher Speed goes first. Same Speed → JS random roll (seeded from matchId). Deterministic and verifiable.
@@ -565,7 +446,7 @@ if random(0,100) < (critTraitLevel × 3): damage × 1.5
 - Barrier drops when last friendly unit dies
 - Ranged units attack hero from any position once barrier down
 - Melee units must move adjacent to hero's off-grid position
-- Hero cannot attack — acts only through card actions and trait skills
+- Hero cannot attack — acts only through card actions
 
 ## 8.9 Win Condition & Draw
 - Hero HP reaches 0 = defeat
@@ -596,12 +477,12 @@ if random(0,100) < (critTraitLevel × 3): damage × 1.5
 effectiveAttack = baseAttack × (1 + hero.attack × attackMultiplier)
 attackMultiplier = 0.1 + (Attack trait level × 0.1)
 
-// Effective Defense (physical only)
+// Effective Defense
 damageReduction = hero.defense × defenseMultiplier
 defenseMultiplier = 0.1 + (Defense trait level × 0.1)
-finalPhysicalDamage = rawDamage × (1 - damageReduction)
+finalDamage = rawDamage × (1 - damageReduction)
 
-// Magic Resistance (spell damage only, independent from armor penetration)
+// Magic Resistance (spell damage only)
 finalSpellDamage = rawSpellDamage × (1 - unit.magicResistance / 100)
 
 // Armor Penetration (physical only, does NOT affect magic resistance)
@@ -610,6 +491,10 @@ effectiveDefense = targetDefense × (1 - armorPenTraitLevel × 0.05)
 // Effective Spell Power
 effectiveSpellPower = baseSpellPower × (1 + hero.spellPower × spellMultiplier)
 spellMultiplier = 0.1 + (Power trait level × 0.1)
+
+// Arcane Mastery (all spells)
+adjustedManaCost = max(1, baseManaCost - floor(arcaneMasteryLevel / 2))
+adjustedSpellDmg = baseSpellDmg × (1 + arcaneMasteryLevel × 0.05)
 
 // Mana Cap
 maxMana = 12 × (1 + hero.knowledge × 0.1)
@@ -625,16 +510,11 @@ if attackerBlocked:   damage × 0.5
 // Vitality
 effectiveHP = baseHP × (1 + vitalityTraitLevel × 0.05)
 
-// First Aid
-healAmount = 3 × (1 + hero.spellPower × (0.1 + traitLevel × 0.1))
-actualHeal = min(healAmount, unit.maxHP - unit.currentHP)
-cooldown = 4 turns (static)
-
 // Spell Failure
 failRoll = random(0, 100)
 failChance = baseFailChance - (Wisdom trait level × 2%)
 failChance = max(1%, failChance)
-if failRoll < failChance: spell consumed, mana spent, no effect
+if failRoll < failChance: spell burned to graveyard, mana spent, no effect
 
 // ELO Floor
 ELO minimum = 0, cannot go negative
@@ -874,9 +754,6 @@ Protected page accessible only by admin wallet:
 - Set card name, faction, rarity, school
 - Set base stats (attack, defense, HP, initiative, speed, ammo, mana cost)
 - Set magic resistance
-- Set school immunity bitmask
-- Set effect immunity bitmask
-- Add/edit ability structs
 - Set spell parameters if spell card
 - Preview card before publishing
 - Publish card (makes droppable)
@@ -960,19 +837,19 @@ Protected page accessible only by admin wallet:
 | Page | Description |
 |---|---|
 | Home | Connect wallet, hero overview, season standings, ELO rank |
-| Collection | View owned NFTs, filter by faction/rarity/school/type |
+| Collection | View owned NFTs, filter by faction/rarity/type |
 | Deck Builder | Build, validate, save decks from collection |
 | Pack Opening | Buy and open packs with animated card reveal |
 | Marketplace | Browse listings, list cards, buy cards |
 | Duel Lobby | Create or accept duels, set bet, view open duels |
-| Battle | Full 3D isometric game board |
+| Battle | 2D hex grid with animated sprites (WebGPU renderer) |
 | Hero Profile | Stats, traits, ELO history, season progress, archived heroes |
 | Admin Panel | Card/pack/season management (admin wallet only) |
 
 ## 17.2 Battle UI Requirements
-- 3D isometric 6×8 grid (Three.js)
-- Animated 3D unit models: idle, walk, attack, death
-- Spell effect particles per school (procedural Three.js)
+- 2D hex grid with WebGPU renderer (imported from external project)
+- Animated 2D sprites: idle, walk, attack, death
+- Spell visual effects
 - Initiative order queue displayed
 - Mana bar, hero HP bar, unit HP bars above units
 - Hand at bottom, opponent hand count shown (face down)
@@ -1005,7 +882,7 @@ Protected page accessible only by admin wallet:
 - **Framework**: React + Vite
 - **Blockchain interaction**: wagmi
 - **Low level Ethereum**: viem (used internally by wagmi)
-- **3D rendering**: Three.js
+- **Battle rendering**: WebGPU (2D hex grid, animated sprites — imported renderer)
 - **Wallet support**: MetaMask, WalletConnect via wagmi connectors
 
 ## 18.3 Development Workflow
@@ -1031,7 +908,7 @@ Protected page accessible only by admin wallet:
 - `GameConfig` — card stats, abilities, pack pools, balance values
 - `DuelManager` — match creation, state channel settlement, ELO
 - `PackOpening` — Chainlink VRF, minting logic
-- `SpellEngine` — spell resolution, effect application
+- `SpellEngine` — spell resolution, effect application (deferred)
 
 ## 18.5 Randomness Sources
 | Event | Source |
@@ -1047,10 +924,9 @@ Protected page accessible only by admin wallet:
 
 **Game Design:**
 - [ ] All faction × archetype starting trait assignments defined
-- [ ] Full card roster (24–32 units, 18–24 spells) with balanced stats
+- [ ] Full card roster (24–32 units, 8–12 spells) with balanced stats
 - [ ] Starter deck composition defined in GameConfig
-- [ ] Full effect immunity bitmask list finalized
-- [ ] Arena visual design finalized
+- [ ] Hex grid dimensions finalized
 - [ ] N-game calibration count confirmed (proposed: 25)
 
 **Smart Contracts:**
@@ -1063,8 +939,8 @@ Protected page accessible only by admin wallet:
 
 **Assets:**
 - [ ] All card art generated and uploaded to IPFS
-- [ ] All 3D unit models rigged and animated
-- [ ] Spell effect particles per school implemented
+- [ ] All 2D unit sprites with animations (idle, walk, attack, death)
+- [ ] Spell visual effects implemented
 - [ ] Admin panel card creation workflow tested
 
 **Frontend:**
@@ -1075,5 +951,6 @@ Protected page accessible only by admin wallet:
 
 ---
 
-*Arcana Arena GDD v2.1 — Subject to covenant-governed updates*
+*Arcana Arena GDD v3.0 — Simplified Core*
+*v3.0 changes: removed spell schools, unit abilities, immunities, tactical traits. Simplified to melee/ranged combat on hex grid with stat-modifier traits. Status effects deferred. Battle UI changed from 3D isometric to 2D hex with WebGPU renderer and animated sprites.*
 *Balance changes announced on-chain. Asset preservation guaranteed by immutable contracts.*
