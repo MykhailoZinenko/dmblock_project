@@ -86,6 +86,8 @@ cd frontend && npm run dev         # Dev server
 
 ## Key Design Decisions
 - Single `CardData` struct for units and spells (unused fields stay zero)
+- All cards (units AND spells) use identical PNG layout — same frame, same 5 stat icon positions. Icons mean different things per card type: unit shows attack/HP/defense/initiative/manaCost; spell shows spellPower/duration/successChance/manaCost (5th slot unused). SVGRenderer overlays the correct numbers.
+- Spells have a faction field but it has no mechanical effect — purely cosmetic/collection flavor
 - SVGRenderer is an internal library (inlined at compile, no separate deploy)
 - tokenURI reads stats live from GameConfig — stats update automatically when admin changes them
 - Owner sees hero-modified stats in tokenURI; non-owners see base stats only (hero system Phase 2)
