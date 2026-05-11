@@ -206,7 +206,8 @@ export default function Marketplace() {
       {!isApprovedForAll ? (
         <div className="card" style={{ maxWidth: 480 }}>
           <p style={{ fontSize: "0.9rem", marginBottom: "0.75rem" }}>
-            Approve the marketplace once to enable listings for any card you own.
+            Approve the marketplace once. Listing transfers the card into escrow until sold or cancelled,
+            so it can't be used in a deck while listed.
           </p>
           <button onClick={handleApproveAll} disabled={txInProgress}>
             {txInProgress ? "Working..." : "Approve Marketplace"}

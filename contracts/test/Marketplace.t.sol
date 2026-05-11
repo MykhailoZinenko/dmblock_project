@@ -69,13 +69,15 @@ contract MarketplaceTest is Test {
 
     // ---------- list ----------
 
-    function test_List_HappyPath() public {
+    function test_List_HappyPath_EscrowsNFT() public {
         _approveAndList(0, PRICE);
 
         Marketplace.Listing memory l = market.getListing(0);
         assertEq(l.seller, seller);
         assertEq(uint256(l.priceWei), uint256(PRICE));
         assertTrue(market.isListed(0));
+        // Escrow: NFT now owned by marketplace
+        assertEq(nft.ownerOf(0), address(market));
     }
 
     function test_List_ApprovedForAll_Works() public {
@@ -85,6 +87,7 @@ contract MarketplaceTest is Test {
         vm.stopPrank();
 
         assertTrue(market.isListed(0));
+        assertEq(nft.ownerOf(0), address(market));
     }
 
     function test_List_ZeroPrice_Reverts() public {
@@ -108,14 +111,6 @@ contract MarketplaceTest is Test {
         market.list(0, PRICE);
     }
 
-    function test_List_AlreadyListed_Reverts() public {
-        _approveAndList(0, PRICE);
-
-        vm.prank(seller);
-        vm.expectRevert(Marketplace.AlreadyListed.selector);
-        market.list(0, PRICE);
-    }
-
     function test_List_EmitsEvent() public {
         vm.prank(seller);
         nft.approve(address(market), 0);
@@ -129,13 +124,15 @@ contract MarketplaceTest is Test {
 
     // ---------- cancel ----------
 
-    function test_Cancel_HappyPath() public {
+    function test_Cancel_HappyPath_ReturnsNFT() public {
         _approveAndList(0, PRICE);
 
         vm.prank(seller);
         market.cancel(0);
 
         assertFalse(market.isListed(0));
+        // Escrow returned to seller
+        assertEq(nft.ownerOf(0), seller);
     }
 
     function test_Cancel_NotListed_Reverts() public {
@@ -149,6 +146,16 @@ contract MarketplaceTest is Test {
 
         vm.prank(other);
         vm.expectRevert(Marketplace.NotSeller.selector);
+        market.cancel(0);
+    }
+
+    function test_Cancel_EmitsEvent() public {
+        _approveAndList(0, PRICE);
+
+        vm.expectEmit(true, true, false, true);
+        emit Marketplace.Cancelled(0, seller);
+
+        vm.prank(seller);
         market.cancel(0);
     }
 
@@ -186,18 +193,6 @@ contract MarketplaceTest is Test {
         market.buy{value: PRICE}(0);
     }
 
-    function test_Buy_StaleListing_Reverts_WhenSellerTransfersOut() public {
-        _approveAndList(0, PRICE);
-
-        // Seller transfers NFT out directly, bypassing marketplace.
-        vm.prank(seller);
-        nft.transferFrom(seller, other, 0);
-
-        vm.prank(buyer);
-        vm.expectRevert(Marketplace.StaleListing.selector);
-        market.buy{value: PRICE}(0);
-    }
-
     function test_Buy_EmitsSoldEvent() public {
         _approveAndList(0, PRICE);
 
@@ -210,48 +205,34 @@ contract MarketplaceTest is Test {
         market.buy{value: PRICE}(0);
     }
 
-    function test_Buy_ZeroRoyaltyReceiver_AllToSeller() public {
-        // Set royalty receiver to address(0) (admin path).
+    function test_Buy_ZeroRoyalty_AllToSeller() public {
+        // BPS=0 disables royalties without changing the receiver (OZ ERC2981 v5
+        // rejects address(0) as receiver). Same buy() code path as a zero-amount split.
         vm.prank(admin);
-        nft.setDefaultRoyalty(address(0), ROYALTY_BPS);
+        nft.setDefaultRoyalty(admin, 0);
 
         _approveAndList(0, PRICE);
 
         uint256 sellerBefore = seller.balance;
+        uint256 adminBefore = admin.balance;
 
         vm.prank(buyer);
         market.buy{value: PRICE}(0);
 
         assertEq(nft.ownerOf(0), buyer);
         assertEq(seller.balance, sellerBefore + uint256(PRICE));
+        assertEq(admin.balance, adminBefore);
     }
 
-    // ---------- cleanupStale ----------
+    // ---------- escrow guarantees ----------
 
-    function test_CleanupStale_HappyPath() public {
+    function test_Escrow_SellerCannotTransferListedNFT() public {
         _approveAndList(0, PRICE);
 
+        // Seller no longer owns it; any direct transfer attempt reverts
         vm.prank(seller);
+        vm.expectRevert();
         nft.transferFrom(seller, other, 0);
-
-        vm.prank(buyer); // anyone can clean up
-        market.cleanupStale(0);
-
-        assertFalse(market.isListed(0));
-    }
-
-    function test_CleanupStale_FreshListing_Reverts() public {
-        _approveAndList(0, PRICE);
-
-        vm.prank(buyer);
-        vm.expectRevert(Marketplace.ListingFresh.selector);
-        market.cleanupStale(0);
-    }
-
-    function test_CleanupStale_NotListed_Reverts() public {
-        vm.prank(buyer);
-        vm.expectRevert(Marketplace.NotListed.selector);
-        market.cleanupStale(0);
     }
 
     // ---------- reentrancy ----------
@@ -269,8 +250,9 @@ contract MarketplaceTest is Test {
         vm.prank(admin);
         nft.setDefaultRoyalty(other, ROYALTY_BPS);
 
-        // Attacker approves + lists.
+        // Attacker approves + lists (NFT moves into marketplace escrow).
         attacker.approveAndList(address(nft), 1, PRICE);
+        assertEq(nft.ownerOf(1), address(market));
 
         // Buyer tries to buy. Attacker reverts on receive (re-entry blocked), seller
         // payout fails, whole tx reverts with PayoutFailed.
@@ -278,10 +260,9 @@ contract MarketplaceTest is Test {
         vm.expectRevert(Marketplace.PayoutFailed.selector);
         market.buy{value: PRICE}(1);
 
-        // Listing must still be present (since buy reverted in full).
-        // Note: technically delete is inside the same reverted tx, so state is rolled back.
+        // Listing rolled back (revert), NFT still in marketplace escrow.
         assertTrue(market.isListed(1));
-        assertEq(nft.ownerOf(1), address(attacker));
+        assertEq(nft.ownerOf(1), address(market));
     }
 }
 
@@ -294,7 +275,6 @@ contract ReentrantSeller {
     }
 
     function approveAndList(address nftAddr, uint256 tokenId, uint96 price) external {
-        // Approve marketplace and list, all initiated by this contract.
         (bool ok1, ) = nftAddr.call(abi.encodeWithSignature("approve(address,uint256)", address(market), tokenId));
         require(ok1, "approve failed");
         market.list(tokenId, price);

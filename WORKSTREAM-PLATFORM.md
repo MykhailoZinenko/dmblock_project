@@ -12,11 +12,12 @@ Everything related to the card economy, deck management, pack system, admin tool
 ## Phase 4: Marketplace
 
 **New contract**: `Marketplace.sol` (immutable)
-- List: owner sets fixed ETH price, listing stored on-chain
-- Buy: buyer sends ETH, atomic transfer (NFT → buyer, ETH → seller minus royalty)
-- Cancel: owner cancels listing, no fee
+- List: owner sets fixed ETH price; NFT is transferred into the marketplace as escrow until sold or cancelled (so a listed card cannot be used in a deck or transferred elsewhere)
+- Buy: buyer sends ETH, atomic transfer (NFT escrow → buyer, ETH → seller minus royalty)
+- Cancel: owner cancels listing, escrowed NFT is returned, no fee
 - ERC-2981 royalties enforced (2.5% on CardNFT)
 - Reentrancy guards, checks-effects-interactions
+- No `onERC721Received` hook — direct `safeTransferFrom` to the marketplace reverts (fail-safe against accidental sends)
 
 **Frontend**: Marketplace page
 - Browse all active listings

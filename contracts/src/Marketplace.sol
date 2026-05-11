@@ -17,13 +17,10 @@ contract Marketplace is ReentrancyGuard {
 
     error NotOwner();
     error NotApproved();
-    error AlreadyListed();
     error NotListed();
     error NotSeller();
     error WrongPrice();
     error ZeroPrice();
-    error StaleListing();
-    error ListingFresh();
     error PayoutFailed();
 
     event Listed(uint256 indexed tokenId, address indexed seller, uint96 priceWei);
@@ -36,16 +33,15 @@ contract Marketplace is ReentrancyGuard {
         address royaltyReceiver,
         uint256 royaltyAmount
     );
-    event StaleCleared(uint256 indexed tokenId, address indexed staleSeller);
 
     constructor(address cardNFTAddress) {
         cardNFT = IERC721(cardNFTAddress);
     }
 
+    /// @notice List a card for sale. The NFT is escrowed by this contract until cancelled or bought.
     function list(uint256 tokenId, uint96 priceWei) external {
         if (priceWei == 0) revert ZeroPrice();
         if (cardNFT.ownerOf(tokenId) != msg.sender) revert NotOwner();
-        if (_listings[tokenId].seller != address(0)) revert AlreadyListed();
 
         bool approved = cardNFT.getApproved(tokenId) == address(this) ||
             cardNFT.isApprovedForAll(msg.sender, address(this));
@@ -53,9 +49,12 @@ contract Marketplace is ReentrancyGuard {
 
         _listings[tokenId] = Listing({seller: msg.sender, priceWei: priceWei});
 
+        cardNFT.transferFrom(msg.sender, address(this), tokenId);
+
         emit Listed(tokenId, msg.sender, priceWei);
     }
 
+    /// @notice Cancel a listing and return the escrowed NFT to the seller.
     function cancel(uint256 tokenId) external {
         Listing memory listing = _listings[tokenId];
         if (listing.seller == address(0)) revert NotListed();
@@ -63,14 +62,16 @@ contract Marketplace is ReentrancyGuard {
 
         delete _listings[tokenId];
 
+        cardNFT.transferFrom(address(this), listing.seller, tokenId);
+
         emit Cancelled(tokenId, msg.sender);
     }
 
+    /// @notice Buy a listed card. Pays royalty per ERC-2981, remainder to the seller.
     function buy(uint256 tokenId) external payable nonReentrant {
         Listing memory listing = _listings[tokenId];
         if (listing.seller == address(0)) revert NotListed();
         if (msg.value != listing.priceWei) revert WrongPrice();
-        if (cardNFT.ownerOf(tokenId) != listing.seller) revert StaleListing();
 
         delete _listings[tokenId];
 
@@ -81,7 +82,7 @@ contract Marketplace is ReentrancyGuard {
         if (royaltyAmount > listing.priceWei) royaltyAmount = listing.priceWei;
         uint256 sellerProceeds = listing.priceWei - royaltyAmount;
 
-        cardNFT.safeTransferFrom(listing.seller, msg.sender, tokenId);
+        cardNFT.safeTransferFrom(address(this), msg.sender, tokenId);
 
         if (royaltyAmount > 0 && royaltyReceiver != address(0)) {
             (bool okR, ) = royaltyReceiver.call{value: royaltyAmount}("");
@@ -96,16 +97,6 @@ contract Marketplace is ReentrancyGuard {
         }
 
         emit Sold(tokenId, listing.seller, msg.sender, listing.priceWei, royaltyReceiver, royaltyAmount);
-    }
-
-    function cleanupStale(uint256 tokenId) external {
-        Listing memory listing = _listings[tokenId];
-        if (listing.seller == address(0)) revert NotListed();
-        if (cardNFT.ownerOf(tokenId) == listing.seller) revert ListingFresh();
-
-        delete _listings[tokenId];
-
-        emit StaleCleared(tokenId, listing.seller);
     }
 
     function getListing(uint256 tokenId) external view returns (Listing memory) {
