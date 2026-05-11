@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import CreateHero from "./pages/CreateHero";
 import Collection from "./pages/Collection";
 import HeroProfile from "./pages/HeroProfile";
+import Marketplace from "./pages/Marketplace";
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/create" element={<CreateHero />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/hero" element={<HeroProfile />} />
+        <Route path="/marketplace" element={<Marketplace />} />
       </Route>
     </Routes>
   );
