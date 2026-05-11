@@ -43,15 +43,19 @@ contract DeployPhase2 is Script {
         cardNFT.setAuthorizedMinter(address(heroNFT), true);
         console.log("HeroNFT authorized as minter");
 
-        // 4. Configure starter deck: 10 Peasants (id 0) + 10 Imps (id 1)
+        // 4. Configure starter deck: 4x each of the 5 common cards = 20
         uint256[] memory starterDeck = new uint256[](20);
-        for (uint256 i = 0; i < 10; i++) starterDeck[i] = 0;
-        for (uint256 i = 10; i < 20; i++) starterDeck[i] = 1;
+        uint256[5] memory commons = [uint256(0), 1, 7, 10, 17]; // Peasant, Militiaman, Torchbearer, Healing, Tower
+        for (uint256 i = 0; i < 5; i++) {
+            for (uint256 j = 0; j < 4; j++) {
+                starterDeck[i * 4 + j] = commons[i];
+            }
+        }
         config.setStarterDeck(starterDeck);
-        console.log("Starter deck configured (10 Peasants + 10 Imps)");
+        console.log("Starter deck configured (4x each of 5 commons)");
 
         // 5. Configure starting traits (4 factions x 4 archetypes)
-        // Castle: Attack(0), Defense(1), Power(2), Vitality(6)
+        // Castle: Attack(0), Power(2), Defense(1), Vitality(6)
         config.setStartingTrait(0, 0, TraitConstants.ATTACK);
         config.setStartingTrait(0, 1, TraitConstants.POWER);
         config.setStartingTrait(0, 2, TraitConstants.DEFENSE);
@@ -61,14 +65,14 @@ contract DeployPhase2 is Script {
         config.setStartingTrait(1, 1, TraitConstants.SPELL_FOCUS);
         config.setStartingTrait(1, 2, TraitConstants.ARMOR_PENETRATION);
         config.setStartingTrait(1, 3, TraitConstants.DAMAGE_REDUCTION);
-        // Necropolis: Vitality(6), DarkMagic(13), Wisdom(7), Defense(1)
+        // Necropolis: Vitality(6), Wisdom(7), SpellFocus(8), Defense(1)
         config.setStartingTrait(2, 0, TraitConstants.VITALITY);
-        config.setStartingTrait(2, 1, TraitConstants.DARK_MAGIC);
-        config.setStartingTrait(2, 2, TraitConstants.WISDOM);
+        config.setStartingTrait(2, 1, TraitConstants.WISDOM);
+        config.setStartingTrait(2, 2, TraitConstants.SPELL_FOCUS);
         config.setStartingTrait(2, 3, TraitConstants.DEFENSE);
-        // Dungeon: ArmorPen(4), AirMagic(12), CriticalStrike(3), DamageReduction(5)
+        // Dungeon: ArmorPen(4), Wisdom(7), CriticalStrike(3), DamageReduction(5)
         config.setStartingTrait(3, 0, TraitConstants.ARMOR_PENETRATION);
-        config.setStartingTrait(3, 1, TraitConstants.AIR_MAGIC);
+        config.setStartingTrait(3, 1, TraitConstants.WISDOM);
         config.setStartingTrait(3, 2, TraitConstants.CRITICAL_STRIKE);
         config.setStartingTrait(3, 3, TraitConstants.DAMAGE_REDUCTION);
         console.log("Starting traits configured (16 faction x archetype combos)");

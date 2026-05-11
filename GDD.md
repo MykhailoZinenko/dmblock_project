@@ -492,6 +492,13 @@ effectiveDefense = targetDefense × (1 - armorPenTraitLevel × 0.05)
 effectiveSpellPower = baseSpellPower × (1 + hero.spellPower × spellMultiplier)
 spellMultiplier = 0.1 + (Power trait level × 0.1)
 
+// Spell Duration (for duration-based spells, baseDuration stored in contract)
+effectiveDuration = baseDuration + floor(hero.spellPower × 0.2)
+
+// Spell Damage/Heal (scaling notation: "base + multiplier×")
+effectiveSpellValue = baseSpellPower + floor(effectiveSpellPower × spellScalingMultiplier)
+// e.g. Healing "15 + 2.0×": 15 + floor(effectiveSpellPower × 2.0)
+
 // Arcane Mastery (all spells)
 adjustedManaCost = max(1, baseManaCost - floor(arcaneMasteryLevel / 2))
 adjustedSpellDmg = baseSpellDmg × (1 + arcaneMasteryLevel × 0.05)
