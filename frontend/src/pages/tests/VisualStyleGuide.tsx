@@ -29,7 +29,7 @@ export default function VisualStyleGuide() {
   const row: React.CSSProperties = { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 16 };
 
   return (
-    <div style={{ padding: 40, maxWidth: 1000, margin: "0 auto" }}>
+    <div style={{ padding: 40, maxWidth: 1000, margin: "0 auto", height: "100vh", overflowY: "auto" }}>
       <h1 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-3xl)", marginBottom: 32, color: "var(--color-gold)" }}>
         Arcana Arena — Style Guide
       </h1>
