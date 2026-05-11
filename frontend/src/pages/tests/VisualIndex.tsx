@@ -12,9 +12,8 @@ const tests = [
   { path: "09", label: "09 — MSDF Text" },
   { path: "10", label: "10 — ParticleContainer" },
   { path: "13", label: "13 — Hex Grid Battle" },
-  { path: "asset-registry", label: "Asset Registry" },
-  { path: "debug-container", label: "Debug — Minimal Text+Sprite" },
-  { path: "style-guide", label: "Style Guide" },
+  { path: "assets", label: "Asset Registry" },
+  { path: "debug", label: "Debug — Minimal Text+Sprite" },
 ];
 
 export default function VisualIndex() {
@@ -31,7 +30,7 @@ export default function VisualIndex() {
         {tests.map(t => (
           <li key={t.path} style={{ marginBottom: 12 }}>
             <Link
-              to={`/tests/${t.path}`}
+              to={`/tests/visual/${t.path}`}
               style={{ color: "#5dade2", fontSize: 18, textDecoration: "none" }}
             >
               {t.label}
