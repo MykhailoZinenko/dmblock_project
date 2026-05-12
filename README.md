@@ -163,6 +163,10 @@ contract surface and frontend wiring are sound.
 
 ## AI Disclosure
 
-Claude (Anthropic) assisted with contract scaffolding, frontend component
-implementations, and visual/styling work. All architectural decisions,
-testing, and final code review were done by the authors.
+- **Claude** (Anthropic) — assisted with contract scaffolding, frontend
+  component implementations, and visual/styling work.
+- **Codex** (OpenAI) — used as a commit helper for managing git (staging,
+  commit messages, branch sync).
+
+All architectural decisions, testing, and final code review were done by
+the authors.
