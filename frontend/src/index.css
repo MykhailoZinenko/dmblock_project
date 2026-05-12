@@ -555,6 +555,46 @@ a, button, [role="button"], input, select, textarea, .clickable {
   cursor: not-allowed;
 }
 
+.admin-subsection {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(214, 173, 98, 0.18);
+  border-left: 3px solid rgba(214, 173, 98, 0.55);
+  border-radius: var(--radius-sm);
+  background: rgba(10, 10, 18, 0.32);
+}
+
+.admin-subsection-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.admin-subsection-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+  color: var(--color-parchment);
+}
+
+.admin-subsection-head .msg-info {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm);
+}
+
+.admin-section-help code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(214, 173, 98, 0.12);
+  color: var(--color-accent, #efe1c6);
+}
+
 @media (max-width: 760px) {
   .admin-id-row {
     grid-template-columns: 1fr;

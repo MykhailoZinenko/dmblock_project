@@ -568,48 +568,86 @@ export default function AdminPanel() {
         <div className="admin-form admin-pack-form">
           <div className="admin-inline">
             <Select label="Tier" value={packForm.tier} options={TIERS} onChange={(tier) => setPackForm({ ...packForm, tier })} />
-            <Select label="Guaranteed" value={packForm.guaranteedRarity} options={RARITIES} onChange={(guaranteedRarity) => setPackForm({ ...packForm, guaranteedRarity })} />
           </div>
-          <div className="admin-inline">
-            <Field label="Price ETH">
-              <input className="text-input" value={packForm.priceEth} onChange={(e) => setPackForm({ ...packForm, priceEth: e.target.value })} />
-            </Field>
-            <Field label="Card Count">
-              <input className="text-input" type="number" min="1" value={packForm.cardCount} onChange={(e) => setPackForm({ ...packForm, cardCount: e.target.value })} />
-            </Field>
-          </div>
-          <label className="admin-check">
-            <input type="checkbox" checked={packForm.enabled} onChange={(e) => setPackForm({ ...packForm, enabled: e.target.checked })} />
-            <span>Active tier</span>
-          </label>
-          <ArcanaButton variant="blue" onClick={setTierConfig} disabled={!isPackOwner || txInProgress}>
-            Save Tier Config
-          </ArcanaButton>
 
-          <Field label="Tier Pool">
-            <input className="text-input" value={packForm.pool} onChange={(e) => setPackForm({ ...packForm, pool: e.target.value })} placeholder="0, 1, 2, 3" />
-          </Field>
-          <ArcanaButton variant="blue" onClick={setTierPool} disabled={!isPackOwner || txInProgress || !packForm.pool.trim()}>
-            Save Tier Pool
-          </ArcanaButton>
-
-          <div className="admin-inline">
-            <Field label="Card ID">
-              <input className="text-input" value={packForm.priceCardId} onChange={(e) => setPackForm({ ...packForm, priceCardId: e.target.value })} />
-            </Field>
-            <Field label="Base ETH">
-              <input className="text-input" value={packForm.basePriceEth} onChange={(e) => setPackForm({ ...packForm, basePriceEth: e.target.value })} />
-            </Field>
-            <Field label="TWAP ETH">
-              <input className="text-input" value={packForm.twapPriceEth} onChange={(e) => setPackForm({ ...packForm, twapPriceEth: e.target.value })} />
-            </Field>
-            <Field label="Trades">
-              <input className="text-input" type="number" min="0" value={packForm.uniqueTrades} onChange={(e) => setPackForm({ ...packForm, uniqueTrades: e.target.value })} />
-            </Field>
+          <div className="admin-subsection">
+            <div className="admin-subsection-head">
+              <h3>1. Tier Config</h3>
+              <span className="msg-info">setTierConfig</span>
+            </div>
+            <p className="msg-info admin-section-help">
+              The four basics of a pack tier. <strong>Price</strong> is what players pay,
+              <strong> Card Count</strong> is how many cards drop, <strong>Guaranteed</strong> is
+              the minimum rarity one of those cards is forced to be, and <strong>Active</strong>
+              toggles whether players can buy this tier (uncheck to disable without losing the config).
+            </p>
+            <div className="admin-inline">
+              <Field label="Price ETH">
+                <input className="text-input" value={packForm.priceEth} onChange={(e) => setPackForm({ ...packForm, priceEth: e.target.value })} />
+              </Field>
+              <Field label="Card Count">
+                <input className="text-input" type="number" min="1" value={packForm.cardCount} onChange={(e) => setPackForm({ ...packForm, cardCount: e.target.value })} />
+              </Field>
+              <Select label="Guaranteed" value={packForm.guaranteedRarity} options={RARITIES} onChange={(guaranteedRarity) => setPackForm({ ...packForm, guaranteedRarity })} />
+            </div>
+            <label className="admin-check">
+              <input type="checkbox" checked={packForm.enabled} onChange={(e) => setPackForm({ ...packForm, enabled: e.target.checked })} />
+              <span>Active tier</span>
+            </label>
+            <ArcanaButton variant="blue" onClick={setTierConfig} disabled={!isPackOwner || txInProgress}>
+              Save Tier Config
+            </ArcanaButton>
           </div>
-          <ArcanaButton variant="red" onClick={setCardPrice} disabled={!isPackOwner || txInProgress || !packForm.priceCardId}>
-            Save Card Price
-          </ArcanaButton>
+
+          <div className="admin-subsection">
+            <div className="admin-subsection-head">
+              <h3>2. Tier Pool</h3>
+              <span className="msg-info">setTierPool</span>
+            </div>
+            <p className="msg-info admin-section-help">
+              Comma-separated card IDs that are <em>eligible to drop</em> from this tier.
+              Saving <strong>replaces the whole pool</strong> — include every card you want
+              droppable. Each card here also needs a price in <em>Card Pricing</em> below or
+              the weighting math will revert.
+            </p>
+            <Field label="Tier Pool">
+              <input className="text-input" value={packForm.pool} onChange={(e) => setPackForm({ ...packForm, pool: e.target.value })} placeholder="0, 1, 2, 3" />
+            </Field>
+            <ArcanaButton variant="blue" onClick={setTierPool} disabled={!isPackOwner || txInProgress || !packForm.pool.trim()}>
+              Save Tier Pool
+            </ArcanaButton>
+          </div>
+
+          <div className="admin-subsection">
+            <div className="admin-subsection-head">
+              <h3>3. Card Pricing</h3>
+              <span className="msg-info">setCardPrice</span>
+            </div>
+            <p className="msg-info admin-section-help">
+              Per-card pricing that drives drop weight inside a tier — weight is
+              <code> 1e24 / price</code>, so <strong>higher price → rarer drop</strong>.
+              Set <strong>Base ETH</strong> for every card in any pool. The contract auto-switches
+              to <strong>TWAP ETH</strong> once a card has ≥ 10 unique marketplace trades; on a
+              fresh deploy leave TWAP and Trades at <code>0</code>.
+            </p>
+            <div className="admin-inline">
+              <Field label="Card ID">
+                <input className="text-input" value={packForm.priceCardId} onChange={(e) => setPackForm({ ...packForm, priceCardId: e.target.value })} />
+              </Field>
+              <Field label="Base ETH">
+                <input className="text-input" value={packForm.basePriceEth} onChange={(e) => setPackForm({ ...packForm, basePriceEth: e.target.value })} />
+              </Field>
+              <Field label="TWAP ETH">
+                <input className="text-input" value={packForm.twapPriceEth} onChange={(e) => setPackForm({ ...packForm, twapPriceEth: e.target.value })} />
+              </Field>
+              <Field label="Trades">
+                <input className="text-input" type="number" min="0" value={packForm.uniqueTrades} onChange={(e) => setPackForm({ ...packForm, uniqueTrades: e.target.value })} />
+              </Field>
+            </div>
+            <ArcanaButton variant="red" onClick={setCardPrice} disabled={!isPackOwner || txInProgress || !packForm.priceCardId}>
+              Save Card Price
+            </ArcanaButton>
+          </div>
         </div>
       </section>
 
