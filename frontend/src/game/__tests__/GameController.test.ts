@@ -31,6 +31,10 @@ describe('GameController', () => {
     ctrl = new GameController();
   });
 
+  it('getCurrentUnit returns null before startGame (e.g. multiplayer deck exchange)', () => {
+    expect(ctrl.getCurrentUnit()).toBeNull();
+  });
+
   describe('startGame', () => {
     it('sets phase to ACTIVATION and turnNumber to 1', () => {
       ctrl.startGame(42);

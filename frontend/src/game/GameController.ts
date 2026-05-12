@@ -20,10 +20,18 @@ export type GameEvent =
   | 'stateChange';
 
 export class GameController {
-  private state!: GameState;
+  /** Set in `startGame`. Multiplayer UI may render before decks finish exchanging. */
+  private state: GameState | undefined;
   private listeners: Map<GameEvent, Set<Function>> = new Map();
 
   constructor() {}
+
+  private requireState(): GameState {
+    if (this.state === undefined) {
+      throw new Error('GameController: used before startGame()');
+    }
+    return this.state;
+  }
 
   // --- Lifecycle ---
 
@@ -43,17 +51,19 @@ export class GameController {
   // --- Getters ---
 
   getState(): GameState {
-    return this.state;
+    return this.requireState();
   }
 
   getCurrentUnit(): UnitInstance | null {
+    const s = this.state;
     if (
-      !this.state.activationQueue.length ||
-      this.state.currentActivationIndex >= this.state.activationQueue.length
+      s === undefined ||
+      !s.activationQueue.length ||
+      s.currentActivationIndex >= s.activationQueue.length
     ) {
       return null;
     }
-    return this.state.activationQueue[this.state.currentActivationIndex];
+    return s.activationQueue[s.currentActivationIndex];
   }
 
   getControllingPlayer(): number {
@@ -62,85 +72,90 @@ export class GameController {
   }
 
   getTurnNumber(): number {
-    return this.state.turnNumber;
+    return this.requireState().turnNumber;
   }
 
   getPhase(): GamePhase {
-    return this.state.phase;
+    return this.requireState().phase;
   }
 
   // --- Turn actions ---
 
   passActivation(): void {
-    if (!this.state.activationQueue.length) {
+    const s = this.requireState();
+    if (!s.activationQueue.length) {
       return;
     }
     this.nextActivation();
   }
 
   rebuildQueue(): void {
-    this.state.activationQueue = buildInitiativeQueue(this.state.units, this.state.rng);
-    this.state.currentActivationIndex = 0;
-    this.emit('stateChange', this.state);
-    if (this.state.activationQueue.length > 0) {
-      this.emit('activationStart', { unit: this.state.activationQueue[0] });
+    const s = this.requireState();
+    s.activationQueue = buildInitiativeQueue(s.units, s.rng);
+    s.currentActivationIndex = 0;
+    this.emit('stateChange', s);
+    if (s.activationQueue.length > 0) {
+      this.emit('activationStart', { unit: s.activationQueue[0] });
     }
   }
 
   private nextActivation(): void {
+    const s = this.requireState();
     const currentUnit = this.getCurrentUnit();
     if (currentUnit && currentUnit.alive) {
       tickUnitEffects(currentUnit);
     }
     this.emit('activationEnd', { unit: currentUnit });
 
-    this.state.currentActivationIndex++;
+    s.currentActivationIndex++;
 
     // Skip dead units
     while (
-      this.state.currentActivationIndex < this.state.activationQueue.length &&
-      !this.state.activationQueue[this.state.currentActivationIndex].alive
+      s.currentActivationIndex < s.activationQueue.length &&
+      !s.activationQueue[s.currentActivationIndex].alive
     ) {
-      this.state.currentActivationIndex++;
+      s.currentActivationIndex++;
     }
 
-    this.emit('stateChange', this.state);
+    this.emit('stateChange', s);
 
-    if (this.state.currentActivationIndex < this.state.activationQueue.length) {
+    if (s.currentActivationIndex < s.activationQueue.length) {
       this.emit('activationStart', {
-        unit: this.state.activationQueue[this.state.currentActivationIndex],
+        unit: s.activationQueue[s.currentActivationIndex],
       });
     }
   }
 
   isQueueExhausted(): boolean {
-    return this.state.currentActivationIndex >= this.state.activationQueue.length;
+    const s = this.requireState();
+    return s.currentActivationIndex >= s.activationQueue.length;
   }
 
   endTurn(): void {
-    this.state.turnNumber++;
+    const s = this.requireState();
+    s.turnNumber++;
 
     // Expire status effects FIRST — before AP reset, mana, queue rebuild
-    const expiredUids = tickStatusEffects(this.state);
+    const expiredUids = tickStatusEffects(s);
     for (const uid of expiredUids) {
       this.emit('effectExpired', { uid });
     }
 
     // Add mana (capped)
-    for (const player of this.state.players) {
+    for (const player of s.players) {
       player.mana = Math.min(player.mana + MANA_PER_TURN, MANA_CAP);
     }
 
     // Draw a card for each player (if deck has cards and hand not full)
     const HAND_LIMIT = 6;
-    for (const p of this.state.players) {
+    for (const p of s.players) {
       if (p.deck.length > 0 && p.hand.length < HAND_LIMIT) {
         p.hand.push(p.deck.shift()!);
       }
     }
 
     // Reset alive units (after effects cleared so speed is restored)
-    for (const unit of this.state.units) {
+    for (const unit of s.units) {
       if (unit.alive) {
         unit.remainingAp = unit.speed;
         unit.retaliatedThisTurn = false;
@@ -148,16 +163,16 @@ export class GameController {
     }
 
     // Rebuild queue
-    this.state.activationQueue = buildInitiativeQueue(this.state.units, this.state.rng);
-    this.state.currentActivationIndex = 0;
-    this.state.phase = 'ACTIVATION';
+    s.activationQueue = buildInitiativeQueue(s.units, s.rng);
+    s.currentActivationIndex = 0;
+    s.phase = 'ACTIVATION';
 
-    this.emit('stateChange', this.state);
-    this.emit('turnEnd', { turnNumber: this.state.turnNumber - 1 });
-    this.emit('turnStart', { turnNumber: this.state.turnNumber });
+    this.emit('stateChange', s);
+    this.emit('turnEnd', { turnNumber: s.turnNumber - 1 });
+    this.emit('turnStart', { turnNumber: s.turnNumber });
 
-    if (this.state.activationQueue.length > 0) {
-      this.emit('activationStart', { unit: this.state.activationQueue[0] });
+    if (s.activationQueue.length > 0) {
+      this.emit('activationStart', { unit: s.activationQueue[0] });
     }
   }
 
