@@ -426,9 +426,9 @@ describe('executeAttack', () => {
     expect(result.retaliation).toBeUndefined();
   });
 
-  it('no retaliation if target is ranged (ammo > 0)', () => {
+  it('ranged unit retaliates in melee with half damage', () => {
     const state = createGameState(999);
-    const attacker = makeUnit({ uid: 1, cardId: 0, playerId: 0, col: 3, row: 3, attack: 5 });
+    const attacker = makeUnit({ uid: 1, cardId: 0, playerId: 0, col: 3, row: 3, attack: 5, currentHp: 100, maxHp: 100 });
     // Archer (id 2) has ammo > 0
     const enemy = makeUnit({
       uid: 2, cardId: 2, playerId: 1, col: 4, row: 3,
@@ -438,7 +438,10 @@ describe('executeAttack', () => {
     placeUnit(state, enemy);
 
     const result = executeAttack(state, 1, 2);
-    expect(result.retaliation).toBeUndefined();
+    expect(result.retaliation).toBeDefined();
+    // Ranged retaliation is halved
+    const fullDamage = calculateDamage(enemy, attacker, state.rng).damage;
+    expect(result.retaliation!.damage).toBeLessThanOrEqual(fullDamage);
   });
 
   it('sets attacker AP to 0 after attack', () => {

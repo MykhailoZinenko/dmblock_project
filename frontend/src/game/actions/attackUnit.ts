@@ -153,15 +153,19 @@ export function executeAttack(
     attackType,
   };
 
-  // Retaliation: melee only, target alive, hasn't retaliated, is melee unit
+  // Retaliation: any non-building unit can retaliate when hit in melee
   if (attackType === 'melee' && !targetDied && !target.retaliatedThisTurn) {
     const targetCard = getCard(target.cardId);
-    if (isMelee(targetCard) && !isBuilding(targetCard)) {
+    if (!isBuilding(targetCard)) {
       const retDamage = calculateDamage(target, attacker, state.rng);
-      const attackerDied = applyDamage(state, attackerUid, retDamage.damage);
+      let retFinalDamage = retDamage.damage;
+      if (isRanged(targetCard)) {
+        retFinalDamage = Math.max(1, Math.floor(retFinalDamage * 0.5));
+      }
+      const attackerDied = applyDamage(state, attackerUid, retFinalDamage);
       target.retaliatedThisTurn = true;
       result.retaliation = {
-        damage: retDamage.damage,
+        damage: retFinalDamage,
         isCrit: retDamage.isCrit,
         attackerDied,
       };
