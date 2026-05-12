@@ -1,9 +1,11 @@
 import type { GameState } from '../GameState';
-import type { UnitInstance } from '../types';
+import type { UnitInstance, HexCoord } from '../types';
 import { getCard, isBuilding, isMelee, isRanged, hasAbility } from '../cardRegistry';
-import { hexNeighbors, hexDistance } from '../hexUtils';
+import { hexNeighbors, hexDistance, hex2px } from '../hexUtils';
 import { calculateDamage, applyDamage } from '../combat';
 import { P1_DEPLOY_COLS, P2_DEPLOY_COLS, GRID_COLS } from '../constants';
+import { findReachable, coordKey } from '../pathfinding';
+import { getOccupiedSet } from './moveUnit';
 
 export interface AttackTarget {
   unitUid: number;
@@ -166,4 +168,134 @@ export function executeAttack(
 
   attacker.remainingAp = 0;
   return result;
+}
+
+/**
+ * For melee auto-walk: find the best hex adjacent to the target that the
+ * attacker can reach within (remainingAp - 1), picking the one closest
+ * to the cursor position for directional control.
+ *
+ * Returns null if already adjacent (no walk needed) or no valid hex exists.
+ */
+export function getAutoWalkHex(
+  state: GameState,
+  attackerUid: number,
+  targetUid: number,
+  cursorWorldPos: { x: number; y: number },
+): HexCoord | null {
+  const attacker = state.units.find(u => u.uid === attackerUid);
+  const target = state.units.find(u => u.uid === targetUid);
+  if (!attacker || !target || !attacker.alive || !target.alive) return null;
+
+  const card = getCard(attacker.cardId);
+  if (isBuilding(card) || isRanged(card)) return null;
+
+  // Already adjacent? No walk needed.
+  const adjCells = getAdjacentCells(attacker);
+  for (const cell of target.occupiedCells) {
+    if (adjCells.has(`${cell.col},${cell.row}`)) return null;
+  }
+
+  // Budget for movement: need to reserve 1 AP for the attack
+  const moveBudget = attacker.remainingAp - 1;
+  if (moveBudget <= 0) return null;
+
+  // Get all hexes reachable within moveBudget
+  const occupied = getOccupiedSet(state);
+  for (const cell of attacker.occupiedCells) {
+    occupied.delete(coordKey(cell.col, cell.row));
+  }
+  const reachable = findReachable(attacker.col, attacker.row, moveBudget, occupied);
+  const reachableSet = new Set(reachable.map(h => `${h.col},${h.row}`));
+
+  // Find hexes adjacent to target that are in reachable set
+  const targetAdj = new Set<string>();
+  for (const tc of target.occupiedCells) {
+    for (const n of hexNeighbors(tc.col, tc.row)) {
+      targetAdj.add(`${n.col},${n.row}`);
+    }
+  }
+
+  const candidates: HexCoord[] = [];
+  for (const key of targetAdj) {
+    if (!reachableSet.has(key)) continue;
+    if (occupied.has(key)) continue;
+    const [c, r] = key.split(',').map(Number);
+    candidates.push({ col: c, row: r });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Pick candidate closest to cursor position
+  let best = candidates[0];
+  let bestDist = Infinity;
+  for (const cand of candidates) {
+    const p = hex2px(cand.col, cand.row);
+    const dx = p.x - cursorWorldPos.x;
+    const dy = p.y - cursorWorldPos.y;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = cand;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Returns all enemy units that can be reached via auto-walk + attack
+ * by the given melee attacker. Used for orange highlights.
+ * Excludes enemies already adjacent (those get red highlights via getAttackTargets).
+ */
+export function getAutoWalkTargets(
+  state: GameState,
+  attackerUid: number,
+): { unitUid: number; cells: HexCoord[] }[] {
+  const attacker = state.units.find(u => u.uid === attackerUid);
+  if (!attacker || !attacker.alive) return [];
+
+  const card = getCard(attacker.cardId);
+  if (isBuilding(card) || isRanged(card)) return [];
+
+  const moveBudget = attacker.remainingAp - 1;
+  if (moveBudget <= 0) return [];
+
+  const occupied = getOccupiedSet(state);
+  for (const cell of attacker.occupiedCells) {
+    occupied.delete(coordKey(cell.col, cell.row));
+  }
+  const reachable = findReachable(attacker.col, attacker.row, moveBudget, occupied);
+  const reachableSet = new Set(reachable.map(h => `${h.col},${h.row}`));
+
+  const directTargets = getAttackTargets(state, attackerUid);
+  const directUids = new Set(directTargets.map(t => t.unitUid));
+
+  const results: { unitUid: number; cells: HexCoord[] }[] = [];
+
+  for (const unit of state.units) {
+    if (!unit.alive || unit.playerId === attacker.playerId) continue;
+    if (directUids.has(unit.uid)) continue;
+
+    let canReach = false;
+    for (const tc of unit.occupiedCells) {
+      for (const n of hexNeighbors(tc.col, tc.row)) {
+        const key = `${n.col},${n.row}`;
+        if (reachableSet.has(key) && !occupied.has(key)) {
+          canReach = true;
+          break;
+        }
+      }
+      if (canReach) break;
+    }
+
+    if (canReach) {
+      results.push({
+        unitUid: unit.uid,
+        cells: [...unit.occupiedCells],
+      });
+    }
+  }
+
+  return results;
 }
