@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   useAccount,
   useReadContract,
@@ -42,6 +42,8 @@ export default function DuelLobby() {
   }, [address]);
 
   const [betEth, setBetEth] = useState("");
+  const navigate = useNavigate();
+  const [lastAcceptedDuelId, setLastAcceptedDuelId] = useState<number | null>(null);
 
   const { writeContract, data: txHash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
@@ -52,7 +54,15 @@ export default function DuelLobby() {
   });
 
   if (isSuccess) {
-    setTimeout(() => { refetch(); reset(); setBetEth(""); }, 1000);
+    setTimeout(() => {
+      refetch();
+      reset();
+      setBetEth("");
+      if (lastAcceptedDuelId !== null) {
+        navigate(`/battle?duel=${lastAcceptedDuelId}`);
+        setLastAcceptedDuelId(null);
+      }
+    }, 1000);
   }
 
   if (!isConnected) {
@@ -117,6 +127,7 @@ export default function DuelLobby() {
   };
 
   const handleAccept = (duelId: number, bet: bigint) => {
+    setLastAcceptedDuelId(duelId);
     writeContract({
       ...CONTRACTS.duelManager,
       functionName: "acceptDuel",
@@ -139,6 +150,10 @@ export default function DuelLobby() {
       functionName: "claimExpired",
       args: [BigInt(duelId)],
     });
+  };
+
+  const handleEnterBattle = (duelId: number) => {
+    navigate(`/battle?duel=${duelId}`);
   };
 
   return (
@@ -257,8 +272,8 @@ export default function DuelLobby() {
           </div>
           <div className="surface-grid">
             {myActiveDuels.map((d) => (
-              <DuelCard key={d.duelId} duel={d} action="claim"
-                onAction={() => handleClaimExpired(d.duelId)} disabled={txInProgress} />
+              <DuelCard key={d.duelId} duel={d} action="battle"
+                onAction={() => handleEnterBattle(d.duelId)} disabled={txInProgress} />
             ))}
           </div>
         </section>
@@ -286,7 +301,7 @@ function DuelCard({
   duel, action, onAction, disabled,
 }: {
   duel: DuelInfo;
-  action: "accept" | "cancel" | "claim" | "none";
+  action: "accept" | "cancel" | "claim" | "battle" | "none";
   onAction?: () => void;
   disabled: boolean;
 }) {
@@ -333,12 +348,13 @@ function DuelCard({
         )}
         {action !== "none" && onAction && (
           <ArcanaButton
-            variant={action === "cancel" ? "red" : "blue"}
+            variant={action === "cancel" ? "red" : action === "battle" ? "gold" : "blue"}
             size="sm"
             onClick={onAction}
             disabled={disabled || (action === "claim" && !isExpired)}
           >
-            {action === "accept" ? `Accept (${formatEther(duel.player1Bet)} ETH)` :
+            {action === "battle" ? "Enter Battle" :
+             action === "accept" ? `Accept (${formatEther(duel.player1Bet)} ETH)` :
              action === "cancel" ? "Cancel Duel" :
              "Claim Expired"}
           </ArcanaButton>
