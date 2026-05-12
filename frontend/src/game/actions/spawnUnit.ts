@@ -1,8 +1,9 @@
-import { GameState } from '../GameState';
+import type { GameState } from '../GameState';
 import { getCard } from '../cardRegistry';
 import { isValidCell } from '../hexUtils';
 import { P1_DEPLOY_COLS, P2_DEPLOY_COLS } from '../constants';
-import { CardType, HexCoord, UnitInstance } from '../types';
+import { CardType } from '../types';
+import type { HexCoord, UnitInstance } from '../types';
 
 export interface SpawnResult {
   valid: boolean;

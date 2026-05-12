@@ -1,5 +1,5 @@
 import { SeededRNG } from './rng';
-import { UnitInstance } from './types';
+import type { UnitInstance } from './types';
 
 /**
  * Builds the initiative queue for a turn.

@@ -5,7 +5,7 @@ import {
   HERO_HP,
 } from './constants';
 import { SeededRNG } from './rng';
-import {
+import type {
   BoardCell,
   GamePhase,
   PlayerState,
