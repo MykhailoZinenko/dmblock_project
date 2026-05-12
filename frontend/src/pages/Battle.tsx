@@ -295,10 +295,39 @@ export default function Battle() {
       if (!cu) return;
 
       // ── Click on enemy ──
-      const targetUnit = state.units.find(u =>
+      // First check exact hex, then check nearby hexes (sprites render above their hex
+      // due to anchor offset, so clicks on the sprite body may resolve to a neighbor hex)
+      let targetUnit = state.units.find(u =>
         u.alive && u.playerId !== cu.playerId &&
         u.occupiedCells.some(c => c.col === col && c.row === row),
       );
+      if (!targetUnit) {
+        // Check if any attackable enemy is on a hex adjacent to the clicked hex
+        const directTargets = getAttackTargets(state, cu.uid);
+        const autoWalkTgts = getAutoWalkTargets(state, cu.uid);
+        const allTargetUids = new Set([
+          ...directTargets.map(t => t.unitUid),
+          ...autoWalkTgts.map(t => t.unitUid),
+        ]);
+        // Find the closest enemy unit to the click position
+        let bestDist = Infinity;
+        for (const uid of allTargetUids) {
+          const u = state.units.find(x => x.uid === uid);
+          if (!u) continue;
+          for (const cell of u.occupiedCells) {
+            // Only consider enemies whose cells are on or adjacent to the clicked hex
+            const dist = Math.abs(cell.col - col) + Math.abs(cell.row - row);
+            if (dist <= 1) {
+              const p = hex2px(cell.col, cell.row);
+              const d = (p.x - worldX) ** 2 + (p.y - worldY) ** 2;
+              if (d < bestDist) {
+                bestDist = d;
+                targetUnit = u;
+              }
+            }
+          }
+        }
+      }
 
       if (targetUnit) {
         // Helper: after attacker anim + damage, handle retaliation with its own anim
