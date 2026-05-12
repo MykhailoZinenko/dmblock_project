@@ -323,13 +323,28 @@ export default function Battle() {
         const result = executeCast(state, player, spellCardId, { col, row });
         const targetHex = { col, row };
 
+        const finishSpellCast = () => {
+          syncUI();
+          if (currentPhase.type === 'priority') {
+            const prev = prioRef.current;
+            const newPrio: PriorityState = {
+              ...prev,
+              p0Used: player === 0 ? true : prev.p0Used,
+              p1Used: player === 1 ? true : prev.p1Used,
+            };
+            setPriority(newPrio);
+            prioRef.current = newPrio;
+          } else {
+            const cu = ctrl.getCurrentUnit();
+            if (cu) trackActivated(cu.uid);
+            ctrl.passActivation();
+          }
+          setTimeout(() => advanceTurn(), 400);
+        };
+
         if (!result.success) {
           scene.showFizzle(targetHex);
-          syncUI();
-          const cu = ctrl.getCurrentUnit();
-          if (cu) trackActivated(cu.uid);
-          ctrl.passActivation();
-          setTimeout(() => advanceTurn(), 400);
+          finishSpellCast();
           return;
         }
 
@@ -358,11 +373,7 @@ export default function Battle() {
               }
             }
           }
-          syncUI();
-          const cu = ctrl.getCurrentUnit();
-          if (cu) trackActivated(cu.uid);
-          ctrl.passActivation();
-          setTimeout(() => advanceTurn(), 400);
+          finishSpellCast();
         });
         return;
       }
