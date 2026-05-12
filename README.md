@@ -6,10 +6,11 @@
 
 Arcana Arena is a tactical card-battle dApp on Base Sepolia. Players mint hero
 and card NFTs, open randomized booster packs, trade cards on an in-game
-marketplace, and duel opponents on a hex grid. Card ownership, hero
-progression, pack drops, marketplace trades, and duel outcomes are all settled
-on-chain — the frontend is just a thin client over the contracts and a
-Three.js battle renderer.
+marketplace, and duel opponents on a hex grid with units, spells, and status
+effects. Card ownership, hero progression, pack drops, marketplace trades, and
+duel outcomes are all settled on-chain — the frontend is a thin client over
+the contracts plus a custom WebGPU renderer and a deterministic TypeScript
+battle engine.
 
 The goal is to demonstrate a full vertical slice of a Web3 game: NFT minting
 with on-chain stat data, royalty-aware secondary trading, VRF-driven pack
@@ -21,7 +22,7 @@ without redeploying ownership contracts.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   Frontend (React + Vite)                   │
-│   wagmi/viem read & write • Three.js battle renderer        │
+│   wagmi/viem  •  custom WebGPU engine  •  TS battle logic   │
 └────────────────────────────┬────────────────────────────────┘
                              │
         ┌────────────────────┼────────────────────┐
@@ -68,8 +69,13 @@ without redeploying ownership contracts.
   `useWaitForTransactionReceipt`), viem for ABI encoding.
 - An admin panel that drives GameConfig & PackOpening (card CRUD, tier pool
   config, per-card pricing/TWAP) and surfaces live mint/trade stats.
-- A Three.js scene for the battle board, fed by sprite-state definitions
-  matching each card's animation set.
+- `frontend/src/game/` — pure-TS deterministic battle logic (turn flow,
+  initiative queue, AP model, pathfinding, spell casting, status effects,
+  combat resolution). Backed by 339 unit tests.
+- `frontend/src/engine/` — custom WebGPU renderer; `BattleScene` and
+  `AnimationController` handle sprites, HP bars, FX, and per-unit
+  animation state.
+- Duel Lobby page gated behind hero ownership + valid deck.
 
 ## Deployment Details
 
@@ -133,7 +139,8 @@ $BASE_SEPOLIA_RPC_URL` in the deploy scripts. Frontend addresses live in
 - **TWAP** is a per-trade running mean, not time-weighted. Fine for the
   admin dashboard, not for in-contract pricing.
 - **Battle simulation** is client-side; only the final duel outcome is
-  settled on-chain. Per-turn state hashes would let spectators verify replays.
+  settled on-chain. A multiplayer state-channel design (Phase 10) is drafted
+  in [docs/](docs/) but not yet implemented.
 - **No mobile layout** for the admin panel and battle view — desktop only.
 
 ## What I Learned
