@@ -220,6 +220,7 @@ contract IntegrationTest is Test {
 
         config.setStartingTrait(0, 0, TraitConstants.ATTACK);
         config.setStartingTrait(1, 1, TraitConstants.SPELL_FOCUS);
+        heroNFT.setXpGranter(admin, true);
         vm.stopPrank();
     }
 
@@ -241,7 +242,9 @@ contract IntegrationTest is Test {
         // Starting trait applied
         assertEq(heroNFT.getTraitLevel(heroId, TraitConstants.ATTACK), 1);
 
-        // Level up
+        // Level up (need XP first)
+        vm.prank(admin);
+        heroNFT.addXp(heroId, 50000);
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
         vm.prank(player);
         heroNFT.levelUp(heroId, 0, t1);
@@ -288,7 +291,9 @@ contract IntegrationTest is Test {
 
         assertEq(heroNFT.ownerOf(heroId), player2);
 
-        // New owner can level up
+        // New owner can level up (need XP first)
+        vm.prank(admin);
+        heroNFT.addXp(heroId, 50000);
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
         vm.prank(player2);
         heroNFT.levelUp(heroId, 0, t1);

@@ -11,6 +11,7 @@ struct HeroData {
     uint8 spellPower;
     uint8 knowledge;
     uint8 level;        // 1-50
+    uint32 xp;          // accumulated experience points
     uint32 seasonId;
     bool exists;
 }

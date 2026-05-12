@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Duel, IDuelManager} from "./interfaces/IDuelManager.sol";
+import {IHeroNFT} from "./interfaces/IHeroNFT.sol";
 
 contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
     using ECDSA for bytes32;
@@ -22,6 +23,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         address treasury;
         uint32 seasonId;
         address arbiter;
+        IHeroNFT heroNFT;
     }
 
     // keccak256(abi.encode(uint256(keccak256("arcanaarena.storage.DuelManager")) - 1)) & ~bytes32(uint256(0xff))
@@ -32,6 +34,8 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
     uint256 public constant STARTING_ELO = 1000;
     uint256 public constant CALIBRATION_MATCHES = 25;
     uint256 public constant K_FACTOR = 32;
+    uint32 public constant WINNER_XP = 100;
+    uint32 public constant LOSER_XP = 30;
 
     error BetTooLow();
     error DuelNotOpen();
@@ -63,7 +67,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         s.seasonId = 1;
     }
 
-    function createDuel() external payable returns (uint256 duelId) {
+    function createDuel(uint256 heroId) external payable returns (uint256 duelId) {
         DuelManagerStorage storage s = _getStorage();
         if (msg.value < s.minimumBet) revert BetTooLow();
 
@@ -71,12 +75,13 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         Duel storage d = s.duels[duelId];
         d.player1 = msg.sender;
         d.player1Bet = msg.value;
+        d.player1HeroId = heroId;
         d.createdAt = block.timestamp;
 
         emit DuelCreated(duelId, msg.sender, msg.value);
     }
 
-    function acceptDuel(uint256 duelId) external payable nonReentrant {
+    function acceptDuel(uint256 duelId, uint256 heroId) external payable nonReentrant {
         DuelManagerStorage storage s = _getStorage();
         Duel storage d = s.duels[duelId];
         if (d.status != 0) revert DuelNotOpen();
@@ -85,6 +90,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
 
         d.player2 = msg.sender;
         d.player2Bet = msg.value;
+        d.player2HeroId = heroId;
         d.lockedBet = d.player1Bet < msg.value ? d.player1Bet : msg.value;
         d.status = 1; // Active
 
@@ -157,6 +163,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
 
             address loser = winner == d.player1 ? d.player2 : d.player1;
             _updateElo(winner, loser, s);
+            _awardXp(d, winner, s);
 
             emit DuelSettled(duelId, winner, payout, fee);
         }
@@ -209,6 +216,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
 
             address loser = winner == d.player1 ? d.player2 : d.player1;
             _updateElo(winner, loser, s);
+            _awardXp(d, winner, s);
 
             emit DuelSettled(duelId, winner, payout, fee);
         }
@@ -254,6 +262,15 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         emit EloUpdated(loser, s.elo[loser], s.matchCount[loser]);
     }
 
+    function _awardXp(Duel storage d, address winner, DuelManagerStorage storage s) internal {
+        if (address(s.heroNFT) == address(0)) return;
+        if (winner == address(0)) return; // draw — no XP
+        uint256 winnerHeroId = winner == d.player1 ? d.player1HeroId : d.player2HeroId;
+        uint256 loserHeroId = winner == d.player1 ? d.player2HeroId : d.player1HeroId;
+        s.heroNFT.addXp(winnerHeroId, WINNER_XP);
+        s.heroNFT.addXp(loserHeroId, LOSER_XP);
+    }
+
     // --- Admin ---
 
     function setProtocolFee(uint256 bps) external onlyOwner {
@@ -274,6 +291,10 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
 
     function setArbiter(address arbiter_) external onlyOwner {
         _getStorage().arbiter = arbiter_;
+    }
+
+    function setHeroNFT(address heroNFT_) external onlyOwner {
+        _getStorage().heroNFT = IHeroNFT(heroNFT_);
     }
 
     // --- Views ---

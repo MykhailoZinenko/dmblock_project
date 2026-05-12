@@ -64,6 +64,11 @@ export const DuelManagerAbi = [
         "name": "duelId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "heroId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -98,7 +103,13 @@ export const DuelManagerAbi = [
   {
     "type": "function",
     "name": "createDuel",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "heroId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "duelId",
@@ -181,6 +192,16 @@ export const DuelManagerAbi = [
             "name": "winner",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "player1HeroId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "player2HeroId",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }

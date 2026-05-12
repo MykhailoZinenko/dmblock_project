@@ -46,7 +46,7 @@ contract DuelManagerTest is Test {
 
     function test_CreateDuel() public {
         vm.prank(player1);
-        uint256 duelId = dm.createDuel{value: 1 ether}();
+        uint256 duelId = dm.createDuel{value: 1 ether}(0);
 
         assertEq(duelId, 0);
         Duel memory d = dm.getDuel(0);
@@ -60,23 +60,23 @@ contract DuelManagerTest is Test {
         emit IDuelManager.DuelCreated(0, player1, 1 ether);
 
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
     }
 
     function test_CreateDuel_BelowMinimum_Reverts() public {
         vm.prank(player1);
         vm.expectRevert(DuelManager.BetTooLow.selector);
-        dm.createDuel{value: 0.0001 ether}();
+        dm.createDuel{value: 0.0001 ether}(0);
     }
 
     // --- Accept Duel ---
 
     function test_AcceptDuel() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         Duel memory d = dm.getDuel(0);
         assertEq(d.player2, player2);
@@ -86,11 +86,11 @@ contract DuelManagerTest is Test {
 
     function test_AcceptDuel_ExcessRefunded() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         uint256 p2Before = player2.balance;
         vm.prank(player2);
-        dm.acceptDuel{value: 2 ether}(0);
+        dm.acceptDuel{value: 2 ether}(0, 0);
 
         Duel memory d = dm.getDuel(0);
         assertEq(d.lockedBet, 1 ether);
@@ -99,30 +99,30 @@ contract DuelManagerTest is Test {
 
     function test_AcceptDuel_SelfAccept_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         vm.prank(player1);
         vm.expectRevert(DuelManager.CannotAcceptOwnDuel.selector);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
     }
 
     function test_AcceptDuel_WrongStatus_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         vm.prank(player1);
         dm.cancelDuel(0);
 
         vm.prank(player2);
         vm.expectRevert(DuelManager.DuelNotOpen.selector);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
     }
 
     // --- Cancel Duel ---
 
     function test_CancelDuel() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         uint256 balBefore = player1.balance;
         vm.prank(player1);
@@ -134,7 +134,7 @@ contract DuelManagerTest is Test {
 
     function test_CancelDuel_NotPlayer1_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         vm.prank(player2);
         vm.expectRevert(DuelManager.NotPlayer1.selector);
@@ -143,10 +143,10 @@ contract DuelManagerTest is Test {
 
     function test_CancelDuel_NotOpen_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
 
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         vm.prank(player1);
         vm.expectRevert(DuelManager.DuelNotOpen.selector);
@@ -157,9 +157,9 @@ contract DuelManagerTest is Test {
 
     function test_SettleDuel_WinnerGetsPayout() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         bytes memory sig1 = _signResult(0, player1, p1Key);
         bytes memory sig2 = _signResult(0, player1, p2Key);
@@ -178,9 +178,9 @@ contract DuelManagerTest is Test {
 
     function test_SettleDuel_DrawRefundsBoth() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         bytes memory sig1 = _signResult(0, address(0), p1Key);
         bytes memory sig2 = _signResult(0, address(0), p2Key);
@@ -196,9 +196,9 @@ contract DuelManagerTest is Test {
 
     function test_SettleDuel_InvalidSignatures_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         uint256 fakeKey = 0xDEAD;
         bytes memory sig1 = _signResult(0, player1, p1Key);
@@ -210,9 +210,9 @@ contract DuelManagerTest is Test {
 
     function test_SettleDuel_WrongWinner_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         address outsider = address(0xBAD);
         bytes memory sig1 = _signResult(0, outsider, p1Key);
@@ -224,9 +224,9 @@ contract DuelManagerTest is Test {
 
     function test_SettleDuel_DoubleSettle_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         bytes memory sig1 = _signResult(0, player1, p1Key);
         bytes memory sig2 = _signResult(0, player1, p2Key);
@@ -239,9 +239,9 @@ contract DuelManagerTest is Test {
 
     function test_SettleDuel_SwappedSignatureOrder() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         bytes memory sig1 = _signResult(0, player1, p2Key);
         bytes memory sig2 = _signResult(0, player1, p1Key);
@@ -254,9 +254,9 @@ contract DuelManagerTest is Test {
 
     function test_ClaimExpired() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         vm.warp(block.timestamp + 24 hours + 1);
 
@@ -272,9 +272,9 @@ contract DuelManagerTest is Test {
 
     function test_ClaimExpired_TooEarly_Reverts() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         vm.expectRevert(DuelManager.NotExpiredYet.selector);
         dm.claimExpired(0);
@@ -290,9 +290,9 @@ contract DuelManagerTest is Test {
 
     function test_ELO_UpdatesOnSettle() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         bytes memory sig1 = _signResult(0, player1, p1Key);
         bytes memory sig2 = _signResult(0, player1, p2Key);
@@ -307,9 +307,9 @@ contract DuelManagerTest is Test {
     function test_ELO_FloorAtZero() public {
         for (uint256 i = 0; i < 100; i++) {
             vm.prank(player1);
-            uint256 duelId = dm.createDuel{value: MIN_BET}();
+            uint256 duelId = dm.createDuel{value: MIN_BET}(0);
             vm.prank(player2);
-            dm.acceptDuel{value: MIN_BET}(duelId);
+            dm.acceptDuel{value: MIN_BET}(duelId, 0);
 
             bytes memory sig1 = _signResult(duelId, player1, p1Key);
             bytes memory sig2 = _signResult(duelId, player1, p2Key);
@@ -322,9 +322,9 @@ contract DuelManagerTest is Test {
 
     function test_ELO_DrawNoChange() public {
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(0);
+        dm.acceptDuel{value: 1 ether}(0, 0);
 
         bytes memory sig1 = _signResult(0, address(0), p1Key);
         bytes memory sig2 = _signResult(0, address(0), p2Key);
@@ -337,9 +337,9 @@ contract DuelManagerTest is Test {
     function test_Calibration_After25Matches() public {
         for (uint256 i = 0; i < 25; i++) {
             vm.prank(player1);
-            uint256 duelId = dm.createDuel{value: MIN_BET}();
+            uint256 duelId = dm.createDuel{value: MIN_BET}(0);
             vm.prank(player2);
-            dm.acceptDuel{value: MIN_BET}(duelId);
+            dm.acceptDuel{value: MIN_BET}(duelId, 0);
 
             address winner = i % 2 == 0 ? player1 : player2;
             bytes memory sig1 = _signResult(duelId, winner, p1Key);
@@ -388,10 +388,10 @@ contract DuelManagerTest is Test {
     function test_DuelCount() public {
         assertEq(dm.duelCount(), 0);
         vm.prank(player1);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         assertEq(dm.duelCount(), 1);
         vm.prank(player2);
-        dm.createDuel{value: 1 ether}();
+        dm.createDuel{value: 1 ether}(0);
         assertEq(dm.duelCount(), 2);
     }
 
@@ -412,9 +412,9 @@ contract DuelManagerTest is Test {
     function test_ArbiterSettle_Winner() public {
         // Setup: create + accept duel
         vm.prank(player1);
-        uint256 duelId = dm.createDuel{value: 1 ether}();
+        uint256 duelId = dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(duelId);
+        dm.acceptDuel{value: 1 ether}(duelId, 0);
 
         // Set arbiter
         vm.prank(admin);
@@ -434,9 +434,9 @@ contract DuelManagerTest is Test {
 
     function test_ArbiterSettle_Draw() public {
         vm.prank(player1);
-        uint256 duelId = dm.createDuel{value: 1 ether}();
+        uint256 duelId = dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(duelId);
+        dm.acceptDuel{value: 1 ether}(duelId, 0);
 
         vm.prank(admin);
         dm.setArbiter(address(42));
@@ -453,9 +453,9 @@ contract DuelManagerTest is Test {
 
     function test_ArbiterSettle_NotArbiter_Reverts() public {
         vm.prank(player1);
-        uint256 duelId = dm.createDuel{value: 1 ether}();
+        uint256 duelId = dm.createDuel{value: 1 ether}(0);
         vm.prank(player2);
-        dm.acceptDuel{value: 1 ether}(duelId);
+        dm.acceptDuel{value: 1 ether}(duelId, 0);
 
         vm.prank(admin);
         dm.setArbiter(address(42));
@@ -467,7 +467,7 @@ contract DuelManagerTest is Test {
 
     function test_ArbiterSettle_NotActive_Reverts() public {
         vm.prank(player1);
-        uint256 duelId = dm.createDuel{value: 1 ether}();
+        uint256 duelId = dm.createDuel{value: 1 ether}(0);
         // Still Open, not Active
 
         vm.prank(admin);

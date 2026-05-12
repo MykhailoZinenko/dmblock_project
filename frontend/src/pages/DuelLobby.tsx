@@ -29,7 +29,7 @@ function formatTimeLeft(seconds: number): string {
 
 export default function DuelLobby() {
   const { address, isConnected } = useAccount();
-  const { hasHero, isLoading: heroLoading } = useHero();
+  const { hasHero, heroId, isLoading: heroLoading } = useHero();
   const {
     otherOpenDuels, myOpenDuels, myActiveDuels, myHistory,
     playerStats, refetch,
@@ -122,6 +122,7 @@ export default function DuelLobby() {
     writeContract({
       ...CONTRACTS.duelManager,
       functionName: "createDuel",
+      args: [heroId ?? 0n],
       value,
     });
   };
@@ -131,7 +132,7 @@ export default function DuelLobby() {
     writeContract({
       ...CONTRACTS.duelManager,
       functionName: "acceptDuel",
-      args: [BigInt(duelId)],
+      args: [BigInt(duelId), heroId ?? 0n],
       value: bet,
     });
   };

@@ -11,6 +11,8 @@ struct Duel {
     uint256 settledAt;
     uint8 status; // 0=Open, 1=Active, 2=Settled, 3=Cancelled, 4=Expired
     address winner;
+    uint256 player1HeroId;
+    uint256 player2HeroId;
 }
 
 interface IDuelManager {
@@ -21,8 +23,8 @@ interface IDuelManager {
     event DuelExpired(uint256 indexed duelId);
     event EloUpdated(address indexed player, uint256 newElo, uint256 matchCount);
 
-    function createDuel() external payable returns (uint256 duelId);
-    function acceptDuel(uint256 duelId) external payable;
+    function createDuel(uint256 heroId) external payable returns (uint256 duelId);
+    function acceptDuel(uint256 duelId, uint256 heroId) external payable;
     function cancelDuel(uint256 duelId) external;
     function settleDuel(uint256 duelId, address winner, bytes calldata sig1, bytes calldata sig2) external;
     function claimExpired(uint256 duelId) external;

@@ -7,10 +7,14 @@ interface IHeroNFT {
     event HeroCreated(uint256 indexed heroId, address indexed owner, uint8 faction, uint8 archetype, uint32 seasonId);
     event HeroLeveledUp(uint256 indexed heroId, uint8 newLevel, uint8 statChosen, uint8 traitChosen);
     event SeasonUpdated(uint32 newSeasonId);
+    event XpGained(uint256 indexed heroId, uint32 amount, uint32 totalXp);
 
     function createHero(uint8 faction, uint8 archetype) external returns (uint256 heroId);
     function levelUp(uint256 heroId, uint8 statChoice, uint8 traitChoice) external;
     function setSeasonId(uint32 newSeasonId) external;
+    function addXp(uint256 heroId, uint32 amount) external;
+    function setXpGranter(address granter, bool allowed) external;
+    function xpRequired(uint8 level) external pure returns (uint32);
 
     function getHero(uint256 heroId) external view returns (HeroData memory);
     function getTraitLevel(uint256 heroId, uint8 traitId) external view returns (uint8);

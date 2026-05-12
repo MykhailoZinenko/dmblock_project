@@ -33,6 +33,7 @@ contract HeroNFTTest is Test {
 
         heroNFT = new HeroNFT(address(proxy), address(cardNFT));
         cardNFT.setAuthorizedMinter(address(heroNFT), true);
+        heroNFT.setXpGranter(admin, true);
 
         _registerCards();
         _configureStarterDeck();
@@ -84,6 +85,7 @@ contract HeroNFTTest is Test {
     function test_CreateHero_Basic() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0); // Castle Warrior
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         assertEq(heroId, 0);
         assertEq(heroNFT.ownerOf(heroId), player1);
@@ -99,6 +101,7 @@ contract HeroNFTTest is Test {
     function test_CreateHero_WarriorBaseStats() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory hero = heroNFT.getHero(heroId);
 
         // Warrior primary = attack (exact 4), others ±1
@@ -112,6 +115,7 @@ contract HeroNFTTest is Test {
     function test_CreateHero_MageBaseStats() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(1, 1); // Inferno Mage
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory hero = heroNFT.getHero(heroId);
 
         assertEq(hero.spellPower, 3); // primary, no variance
@@ -123,6 +127,7 @@ contract HeroNFTTest is Test {
     function test_CreateHero_SentinelBaseStats() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(2, 3); // Necropolis Sentinel
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory hero = heroNFT.getHero(heroId);
 
         assertEq(hero.defense, 4); // primary, no variance
@@ -133,6 +138,7 @@ contract HeroNFTTest is Test {
     function test_CreateHero_RangerAllVariance() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(3, 2); // Dungeon Ranger
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory hero = heroNFT.getHero(heroId);
 
         // Ranger: all stats get variance (base 2/2/2/2)
@@ -171,6 +177,7 @@ contract HeroNFTTest is Test {
     function test_CreateHero_StartingTrait() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0); // trait = 0+0 = 0
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         assertEq(heroNFT.getTraitLevel(heroId, 0), 1);
 
@@ -221,6 +228,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_Basic() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         HeroData memory heroBefore = heroNFT.getHero(heroId);
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
@@ -236,6 +244,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_AllStatChoices() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory h = heroNFT.getHero(heroId);
 
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
@@ -260,6 +269,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_OnlyOwner() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
 
@@ -271,6 +281,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_MaxLevel_Reverts() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         for (uint8 i = 0; i < 49; i++) {
             (uint8 t1, uint8 t2) = heroNFT.getLevelUpTraitOptions(heroId);
@@ -294,6 +305,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_InvalidStatChoice_Reverts() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
 
@@ -305,6 +317,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_InvalidTraitChoice_Reverts() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1, uint8 t2) = heroNFT.getLevelUpTraitOptions(heroId);
 
@@ -321,6 +334,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_TraitDeterministic() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1a, uint8 t2a) = heroNFT.getLevelUpTraitOptions(heroId);
         (uint8 t1b, uint8 t2b) = heroNFT.getLevelUpTraitOptions(heroId);
@@ -332,6 +346,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_TraitStacking() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
         vm.prank(player1);
@@ -354,6 +369,7 @@ contract HeroNFTTest is Test {
     function test_LevelUp_EmitsEvent() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
 
@@ -369,6 +385,7 @@ contract HeroNFTTest is Test {
     function test_GetLevelUpTraitOptions_TwoDistinct() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1, uint8 t2) = heroNFT.getLevelUpTraitOptions(heroId);
         assertTrue(t1 != t2);
@@ -379,6 +396,7 @@ contract HeroNFTTest is Test {
     function test_GetHeroTraits_Enumeration() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0); // starting trait = 0
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         (uint8 t1,) = heroNFT.getLevelUpTraitOptions(heroId);
         vm.prank(player1);
@@ -421,6 +439,7 @@ contract HeroNFTTest is Test {
 
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
 
         HeroData memory hero = heroNFT.getHero(heroId);
         assertEq(hero.seasonId, 5);
@@ -439,6 +458,7 @@ contract HeroNFTTest is Test {
     function test_ArchetypeBaseStats_Warrior() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 0);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory h = heroNFT.getHero(heroId);
         assertEq(h.attack, 4); // primary, no variance
     }
@@ -446,6 +466,7 @@ contract HeroNFTTest is Test {
     function test_ArchetypeBaseStats_Mage() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 1);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory h = heroNFT.getHero(heroId);
         assertEq(h.spellPower, 3); // primary
     }
@@ -453,6 +474,7 @@ contract HeroNFTTest is Test {
     function test_ArchetypeBaseStats_Sentinel() public {
         vm.prank(player1);
         uint256 heroId = heroNFT.createHero(0, 3);
+        vm.prank(admin); heroNFT.addXp(heroId, 50000);
         HeroData memory h = heroNFT.getHero(heroId);
         assertEq(h.defense, 4); // primary
     }

@@ -21,9 +21,11 @@ contract HeroNFT is ERC721, Ownable, IHeroNFT {
     mapping(uint256 => HeroData) private _heroes;
     mapping(uint256 => mapping(uint8 => uint8)) private _heroTraits;
     mapping(uint256 => uint8[]) private _heroTraitIds;
+    mapping(address => bool) private _xpGranters;
 
     uint8 public constant MAX_LEVEL = 50;
     uint8 public constant BASE_HP = 30;
+    uint32 public constant XP_PER_LEVEL = 100;
 
     error InvalidFaction();
     error InvalidArchetype();
@@ -34,6 +36,8 @@ contract HeroNFT is ERC721, Ownable, IHeroNFT {
     error NotHeroOwner();
     error HeroDoesNotExist();
     error StarterDeckNotConfigured();
+    error NotXpGranter();
+    error InsufficientXp();
 
     constructor(
         address gameConfigProxy,
@@ -67,6 +71,7 @@ contract HeroNFT is ERC721, Ownable, IHeroNFT {
             spellPower: sp,
             knowledge: know,
             level: 1,
+            xp: 0,
             seasonId: _currentSeasonId,
             exists: true
         });
@@ -84,6 +89,7 @@ contract HeroNFT is ERC721, Ownable, IHeroNFT {
         if (!_heroes[heroId].exists) revert HeroDoesNotExist();
         if (ownerOf(heroId) != msg.sender) revert NotHeroOwner();
         if (_heroes[heroId].level >= MAX_LEVEL) revert HeroMaxLevel();
+        if (_heroes[heroId].xp < uint32(_heroes[heroId].level) * XP_PER_LEVEL) revert InsufficientXp();
         if (statChoice > 3) revert InvalidStatChoice();
 
         (uint8 t1, uint8 t2) = _getLevelUpTraitOptions(heroId);
@@ -112,6 +118,21 @@ contract HeroNFT is ERC721, Ownable, IHeroNFT {
     function setSeasonId(uint32 newSeasonId) external onlyOwner {
         _currentSeasonId = newSeasonId;
         emit SeasonUpdated(newSeasonId);
+    }
+
+    function setXpGranter(address granter, bool allowed) external onlyOwner {
+        _xpGranters[granter] = allowed;
+    }
+
+    function addXp(uint256 heroId, uint32 amount) external {
+        if (!_xpGranters[msg.sender]) revert NotXpGranter();
+        if (!_heroes[heroId].exists) revert HeroDoesNotExist();
+        _heroes[heroId].xp += amount;
+        emit XpGained(heroId, amount, _heroes[heroId].xp);
+    }
+
+    function xpRequired(uint8 level) external pure returns (uint32) {
+        return uint32(level) * XP_PER_LEVEL;
     }
 
     function currentSeasonId() external view returns (uint32) {
