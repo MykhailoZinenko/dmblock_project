@@ -301,6 +301,40 @@ export default function Battle() {
       );
 
       if (targetUnit) {
+        // Helper: after attacker anim + damage, handle retaliation with its own anim
+        const finishMeleeAttack = (atkResult: ReturnType<typeof executeAttack>) => {
+          scene.showDamageNumber(
+            { col: targetUnit.col, row: targetUnit.row },
+            atkResult.damage, atkResult.isCrit,
+          );
+          if (atkResult.targetDied) {
+            scene.playDeath(targetUnit.uid, () => {});
+          }
+
+          if (atkResult.retaliation && !atkResult.targetDied) {
+            // Defender plays attack animation THEN damage appears
+            scene.playAttack(targetUnit.uid, { col: cu.col, row: cu.row }, () => {
+              scene.updateHpBar(cu.uid, cu.currentHp, cu.maxHp);
+              scene.showDamageNumber(
+                { col: cu.col, row: cu.row },
+                atkResult.retaliation!.damage, atkResult.retaliation!.isCrit,
+              );
+              if (atkResult.retaliation!.attackerDied) {
+                scene.playDeath(cu.uid, () => {});
+              }
+              syncUI();
+              scheduleAutoEnd();
+              setUI({ type: 'unit_acted' });
+              uiRef.current = { type: 'unit_acted' };
+            });
+          } else {
+            syncUI();
+            scheduleAutoEnd();
+            setUI({ type: 'unit_acted' });
+            uiRef.current = { type: 'unit_acted' };
+          }
+        };
+
         // Direct attack?
         if (canAttack(state, cu.uid, targetUnit.uid).valid) {
           setUI({ type: 'animating' });
@@ -310,7 +344,6 @@ export default function Battle() {
           const attackResult = executeAttack(state, cu.uid, targetUnit.uid);
           scene.updateHpBar(targetUnit.uid, targetUnit.currentHp, targetUnit.maxHp);
 
-          // Ranged? shoot + projectile
           if (attackResult.attackType === 'ranged') {
             scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
               scene.animateProjectile(
@@ -332,29 +365,8 @@ export default function Battle() {
               );
             });
           } else {
-            // Melee direct
             scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
-              scene.showDamageNumber(
-                { col: targetUnit.col, row: targetUnit.row },
-                attackResult.damage, attackResult.isCrit,
-              );
-              if (attackResult.targetDied) {
-                scene.playDeath(targetUnit.uid, () => {});
-              }
-              if (attackResult.retaliation) {
-                scene.updateHpBar(cu.uid, cu.currentHp, cu.maxHp);
-                scene.showDamageNumber(
-                  { col: cu.col, row: cu.row },
-                  attackResult.retaliation.damage, attackResult.retaliation.isCrit,
-                );
-                if (attackResult.retaliation.attackerDied) {
-                  scene.playDeath(cu.uid, () => {});
-                }
-              }
-              syncUI();
-              scheduleAutoEnd();
-              setUI({ type: 'unit_acted' });
-              uiRef.current = { type: 'unit_acted' };
+              finishMeleeAttack(attackResult);
             });
           }
           return;
@@ -375,27 +387,7 @@ export default function Battle() {
               scene.updateHpBar(targetUnit.uid, targetUnit.currentHp, targetUnit.maxHp);
 
               scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
-                scene.showDamageNumber(
-                  { col: targetUnit.col, row: targetUnit.row },
-                  attackResult.damage, attackResult.isCrit,
-                );
-                if (attackResult.targetDied) {
-                  scene.playDeath(targetUnit.uid, () => {});
-                }
-                if (attackResult.retaliation) {
-                  scene.updateHpBar(cu.uid, cu.currentHp, cu.maxHp);
-                  scene.showDamageNumber(
-                    { col: cu.col, row: cu.row },
-                    attackResult.retaliation.damage, attackResult.retaliation.isCrit,
-                  );
-                  if (attackResult.retaliation.attackerDied) {
-                    scene.playDeath(cu.uid, () => {});
-                  }
-                }
-                syncUI();
-                scheduleAutoEnd();
-                setUI({ type: 'unit_acted' });
-                uiRef.current = { type: 'unit_acted' };
+                finishMeleeAttack(attackResult);
               });
             });
             return;
@@ -414,8 +406,9 @@ export default function Battle() {
 
       const path = executeMove(state, cu.uid, { col, row });
       scene.moveUnit(cu.uid, path, () => {
-        setUI({ type: 'unit_acted' });
-        uiRef.current = { type: 'unit_acted' };
+        // After move: stay in unit_turn (not unit_acted) so player can keep moving
+        setUI({ type: 'unit_turn' });
+        uiRef.current = { type: 'unit_turn' };
         if (cu.remainingAp > 0) {
           showActiveUnitHL();
         } else {

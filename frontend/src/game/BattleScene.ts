@@ -3,10 +3,12 @@
 import { Engine } from '../engine/Engine';
 import { Container } from '../engine/nodes/Container';
 import { Graphics } from '../engine/nodes/Graphics';
+import { Sprite } from '../engine/nodes/Sprite';
 import { Text } from '../engine/nodes/Text';
 import { AnimationController, getAttackDirection, type AttackDirection } from './AnimationController';
 import { hex2px } from './hexUtils';
 import { getCard, isBuilding } from './cardRegistry';
+import { arrowProjectile } from './spriteConfig';
 import type { UnitInstance, HexCoord } from './types';
 import {
   GRID_COLS, GRID_ROWS, HEX_SIZE,
@@ -14,6 +16,12 @@ import {
   UNIT_MOVE_SPEED,
   HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_Y_OFFSET,
 } from './constants';
+
+const SMALLBAR_BASE = '/assets/ui/bars/smallbar_base.png';
+const SMALLBAR_FILL = '/assets/ui/bars/smallbar_fill.png';
+const HP_BAR_SCALE = 0.3;
+const HP_BAR_FILL_INSET_X = 8;
+const HP_BAR_FILL_INSET_Y = 10;
 
 export interface AttackableTarget {
   unitUid: number;
@@ -25,7 +33,9 @@ interface UnitEntry {
   uid: number;
   anim: AnimationController;
   container: Container;
-  hpBar: Graphics;
+  hpBarContainer: Container;
+  hpBarFill: Sprite | null;
+  hpBarFillFullWidth: number;
   label: Text;
   currentHp: number;
   maxHp: number;
@@ -92,11 +102,27 @@ export class BattleScene {
     const container = anim.getContainer();
     container.position.set(pos.x, pos.y);
 
-    // HP bar
-    const hpBar = new Graphics();
-    this.drawHpBar(hpBar, unit.currentHp, unit.maxHp);
-    hpBar.position.set(0, HP_BAR_Y_OFFSET);
-    container.addChild(hpBar);
+    // HP bar using smallbar assets
+    const hpBarContainer = new Container();
+    hpBarContainer.position.set(0, HP_BAR_Y_OFFSET);
+
+    const baseTex = await this.engine.textures.load('smallbar_base', SMALLBAR_BASE);
+    const baseSprite = new Sprite(baseTex);
+    baseSprite.anchor.set(0.5, 0.5);
+    baseSprite.scale.set(HP_BAR_SCALE, HP_BAR_SCALE);
+    hpBarContainer.addChild(baseSprite);
+
+    const fillTex = await this.engine.textures.load('smallbar_fill', SMALLBAR_FILL);
+    const fillSprite = new Sprite(fillTex);
+    fillSprite.anchor.set(0, 0.5);
+    const fillFullWidth = (baseTex.width - HP_BAR_FILL_INSET_X * 2) * HP_BAR_SCALE;
+    fillSprite.scale.set(HP_BAR_SCALE, HP_BAR_SCALE);
+    fillSprite.position.set(-fillFullWidth / 2, 0);
+    // Stretch fill to match bar width
+    fillSprite.scale.x = fillFullWidth / fillTex.width;
+    hpBarContainer.addChild(fillSprite);
+
+    container.addChild(hpBarContainer);
 
     // Name label
     const card = getCard(unit.cardId);
@@ -114,7 +140,9 @@ export class BattleScene {
       uid: unit.uid,
       anim,
       container,
-      hpBar,
+      hpBarContainer,
+      hpBarFill: fillSprite,
+      hpBarFillFullWidth: fillFullWidth,
       label: lbl,
       currentHp: unit.currentHp,
       maxHp: unit.maxHp,
@@ -216,10 +244,11 @@ export class BattleScene {
 
   updateHpBar(uid: number, currentHp: number, maxHp: number): void {
     const entry = this.units.get(uid);
-    if (!entry) return;
+    if (!entry || !entry.hpBarFill) return;
     entry.currentHp = currentHp;
     entry.maxHp = maxHp;
-    this.drawHpBar(entry.hpBar, currentHp, maxHp);
+    const ratio = maxHp > 0 ? Math.max(0, Math.min(1, currentHp / maxHp)) : 0;
+    entry.hpBarFill.scale.x = (entry.hpBarFillFullWidth * ratio) / entry.hpBarFill.texture.width;
   }
 
   // ── Highlights ───────────────────────────────────────
@@ -303,24 +332,27 @@ export class BattleScene {
 
   // ── Projectile ───────────────────────────────────────
 
-  animateProjectile(
+  async animateProjectile(
     fromHex: HexCoord,
     toHex: HexCoord,
     onDone: () => void,
-  ): void {
+  ): Promise<void> {
     const from = hex2px(fromHex.col, fromHex.row);
     const to = hex2px(toHex.col, toHex.row);
-
-    const proj = new Graphics();
-    proj.beginFill(0xffffff, 0.9);
-    proj.drawCircle(0, 0, 3);
-    proj.endFill();
-    proj.position.set(from.x, from.y);
-    this.unitLayer.addChild(proj);
-
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
+
+    const tex = await this.engine.textures.load('arrow_proj', arrowProjectile.file);
+    const proj = new Sprite(tex);
+    proj.anchor.set(0.5, 0.5);
+    const s = 24 / arrowProjectile.width;
+    proj.scale.set(s, s);
+    proj.rotation = angle;
+    proj.position.set(from.x, from.y);
+    this.unitLayer.addChild(proj);
+
     const speed = 400;
     let traveled = 0;
 
@@ -349,25 +381,4 @@ export class BattleScene {
     this.engine.stage.removeChild(this.unitLayer);
   }
 
-  // ── Private ──────────────────────────────────────────
-
-  private drawHpBar(gfx: Graphics, currentHp: number, maxHp: number): void {
-    gfx.clear();
-    const ratio = maxHp > 0 ? currentHp / maxHp : 0;
-
-    gfx.beginFill(0x000000, 0.5);
-    gfx.drawRect(-HP_BAR_WIDTH / 2, 0, HP_BAR_WIDTH, HP_BAR_HEIGHT);
-    gfx.endFill();
-
-    let color = 0x2ecc71;
-    if (ratio <= 0.25) color = 0xe74c3c;
-    else if (ratio <= 0.5) color = 0xf1c40f;
-
-    const fillW = HP_BAR_WIDTH * Math.max(0, Math.min(1, ratio));
-    if (fillW > 0) {
-      gfx.beginFill(color, 0.9);
-      gfx.drawRect(-HP_BAR_WIDTH / 2, 0, fillW, HP_BAR_HEIGHT);
-      gfx.endFill();
-    }
-  }
 }
