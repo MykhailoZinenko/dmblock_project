@@ -22,10 +22,11 @@ describe('getSpellTargets', () => {
     expect(targets[0]).toEqual({ col: enemy.col, row: enemy.row });
   });
 
-  it('Inferno (14) AREA returns all board hexes', () => {
+  it('Inferno (14) AREA returns all board hexes + exposed hero hex', () => {
     const state = createGameState(42);
     const targets = getSpellTargets(state, 0, 14);
-    expect(targets).toHaveLength(15 * 11);
+    // 15*11 board hexes + 1 hero hex (barrier down since no units)
+    expect(targets).toHaveLength(15 * 11 + 1);
   });
 });
 

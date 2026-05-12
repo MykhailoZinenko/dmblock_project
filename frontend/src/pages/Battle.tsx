@@ -6,7 +6,12 @@ import {
   GRID_COLS, GRID_ROWS, HEX_SIZE,
   P1_DEPLOY_COLS, P2_DEPLOY_COLS,
   HERO_HP, STARTING_MANA, AUTO_END_DELAY,
+  ACTIVATION_TIMER_SECONDS,
 } from '../game/constants';
+import {
+  isBarrierUp, canAttackHero, executeHeroAttack,
+  checkWinCondition, applyTimeoutDamage, HERO_HEX, HERO_ADJACENT,
+} from '../game/actions/heroActions';
 import { GameController } from '../game/GameController';
 import { canSpawn, executeSpawn } from '../game/actions/spawnUnit';
 import { canCast, executeCast, getSpellTargets } from '../game/actions/castSpell';
@@ -55,10 +60,16 @@ export default function Battle() {
   const [mana, setMana] = useState([STARTING_MANA, STARTING_MANA]);
   const [turn, setTurn] = useState(1);
   const [queueInfo, setQueueInfo] = useState<{ labels: string[]; index: number }>({ labels: [], index: 0 });
+  const [heroHp, setHeroHp] = useState([HERO_HP, HERO_HP]);
+  const [timer, setTimer] = useState(ACTIVATION_TIMER_SECONDS);
+  const [gameOver, setGameOver] = useState<{ winner: number } | null>(null);
+  const [barrierState, setBarrierState] = useState([true, true]);
 
   const phaseRef = useRef(phase);   phaseRef.current = phase;
   const uiRef = useRef(ui);         uiRef.current = ui;
   const prioRef = useRef(priority); prioRef.current = priority;
+  const timerRef = useRef(ACTIVATION_TIMER_SECONDS);
+  const gameOverRef = useRef(false);
 
   const getActivePlayer = useCallback((): number => {
     const p = phaseRef.current;
@@ -74,6 +85,7 @@ export default function Battle() {
     if (!ctrl) return;
     const s = ctrl.getState();
     setMana([s.players[0].mana, s.players[1].mana]);
+    setHeroHp([s.players[0].heroHp, s.players[1].heroHp]);
     setTurn(s.turnNumber);
     setQueueInfo({
       labels: s.activationQueue.map(u => {
@@ -82,6 +94,16 @@ export default function Battle() {
       }),
       index: s.currentActivationIndex,
     });
+
+    const scene = sceneRef.current;
+    if (scene) {
+      scene.updateHeroHp(0, s.players[0].heroHp, HERO_HP);
+      scene.updateHeroHp(1, s.players[1].heroHp, HERO_HP);
+    }
+
+    const b0 = isBarrierUp(s, 0);
+    const b1 = isBarrierUp(s, 1);
+    setBarrierState([b0, b1]);
   }, []);
 
   const showActiveUnitHL = useCallback(() => {
@@ -114,7 +136,18 @@ export default function Battle() {
       });
     }
 
+    const enemyPid = cu.playerId === 0 ? 1 : 0;
+    if (canAttackHero(ctrl.getState(), cu.uid, enemyPid).valid) {
+      for (const adj of HERO_ADJACENT[enemyPid]) {
+        attackable.push({ unitUid: -1, cells: [adj], autoWalk: false });
+      }
+    }
+
     scene.showMoveHighlights({ col: cu.col, row: cu.row }, reachable, attackable);
+
+    if (canAttackHero(ctrl.getState(), cu.uid, enemyPid).valid) {
+      scene.showHeroAttackHighlight(enemyPid);
+    }
   }, []);
 
   const trackActivated = useCallback((uid: number) => {
@@ -147,9 +180,41 @@ export default function Battle() {
     engine.ticker.add(tick);
   }, []);
 
+  const resetTimer = useCallback(() => {
+    timerRef.current = ACTIVATION_TIMER_SECONDS;
+    setTimer(ACTIVATION_TIMER_SECONDS);
+  }, []);
+
+  const handleWinCheck = useCallback((): boolean => {
+    const ctrl = ctrlRef.current;
+    if (!ctrl) return false;
+    const result = checkWinCondition(ctrl.getState());
+    if (result) {
+      setGameOver(result);
+      gameOverRef.current = true;
+      ctrl.getState().phase = 'GAME_OVER';
+      return true;
+    }
+    return false;
+  }, []);
+
+  const checkBarrierChange = useCallback(() => {
+    const ctrl = ctrlRef.current;
+    const scene = sceneRef.current;
+    if (!ctrl || !scene) return;
+    const s = ctrl.getState();
+    const b0 = isBarrierUp(s, 0);
+    const b1 = isBarrierUp(s, 1);
+    setBarrierState(prev => {
+      if (prev[0] && !b0) scene.showBarrierDown(0);
+      if (prev[1] && !b1) scene.showBarrierDown(1);
+      return [b0, b1];
+    });
+  }, []);
+
   const advanceTurn = useCallback(() => {
     const ctrl = ctrlRef.current;
-    if (!ctrl) return;
+    if (!ctrl || gameOverRef.current) return;
     const state = ctrl.getState();
     const prio = prioRef.current;
 
@@ -207,10 +272,11 @@ export default function Battle() {
     const cu = ctrl.getCurrentUnit();
     if (cu) {
       setUI({ type: 'unit_turn' });
+      resetTimer();
       showActiveUnitHL();
     }
     syncUI();
-  }, [syncUI, showActiveUnitHL]);
+  }, [syncUI, showActiveUnitHL, resetTimer]);
 
   const onCardSelect = useCallback((cardId: number) => {
     const card = getCard(cardId);
@@ -271,9 +337,8 @@ export default function Battle() {
 
   const onPass = useCallback(() => {
     const ctrl = ctrlRef.current;
-    if (!ctrl) return;
+    if (!ctrl || gameOverRef.current) return;
 
-    // Priority phase pass — mark priority used, advance
     if (phaseRef.current.type === 'priority') {
       const player = phaseRef.current.player;
       const prev = prioRef.current;
@@ -293,8 +358,9 @@ export default function Battle() {
     if (cu) trackActivated(cu.uid);
     ctrl.passActivation();
     sceneRef.current?.clearHighlights();
+    resetTimer();
     advanceTurn();
-  }, [advanceTurn, trackActivated]);
+  }, [advanceTurn, trackActivated, resetTimer]);
 
   // ─── Hex click handler ──────────────────────────────
   useEffect(() => {
@@ -324,7 +390,10 @@ export default function Battle() {
         const targetHex = { col, row };
 
         const finishSpellCast = () => {
+          checkBarrierChange();
           syncUI();
+          resetTimer();
+          if (handleWinCheck()) return;
           if (currentPhase.type === 'priority') {
             const prev = prioRef.current;
             const newPrio: PriorityState = {
@@ -372,6 +441,9 @@ export default function Battle() {
                 scene.swapToSheep(u.uid);
               }
             }
+          }
+          if (result.heroDamage) {
+            scene.showHeroDamage(result.heroDamage.playerId, result.heroDamage.damage, false);
           }
           finishSpellCast();
         });
@@ -457,7 +529,6 @@ export default function Battle() {
       }
 
       if (targetUnit) {
-        // Helper: after attacker anim + damage, handle retaliation with its own anim
         const finishMeleeAttack = (atkResult: ReturnType<typeof executeAttack>) => {
           scene.showDamageNumber(
             { col: targetUnit.col, row: targetUnit.row },
@@ -465,10 +536,10 @@ export default function Battle() {
           );
           if (atkResult.targetDied) {
             scene.playDeath(targetUnit.uid, () => {});
+            checkBarrierChange();
           }
 
           if (atkResult.retaliation && !atkResult.targetDied) {
-            // Defender plays attack animation THEN damage appears
             scene.playAttack(targetUnit.uid, { col: cu.col, row: cu.row }, () => {
               scene.updateHpBar(cu.uid, cu.currentHp, cu.maxHp);
               scene.showDamageNumber(
@@ -477,14 +548,17 @@ export default function Battle() {
               );
               if (atkResult.retaliation!.attackerDied) {
                 scene.playDeath(cu.uid, () => {});
+                checkBarrierChange();
               }
               syncUI();
+              resetTimer();
               scheduleAutoEnd();
               setUI({ type: 'unit_acted' });
               uiRef.current = { type: 'unit_acted' };
             });
           } else {
             syncUI();
+            resetTimer();
             scheduleAutoEnd();
             setUI({ type: 'unit_acted' });
             uiRef.current = { type: 'unit_acted' };
@@ -512,8 +586,10 @@ export default function Battle() {
                   );
                   if (attackResult.targetDied) {
                     scene.playDeath(targetUnit.uid, () => {});
+                    checkBarrierChange();
                   }
                   syncUI();
+                  resetTimer();
                   scheduleAutoEnd();
                   setUI({ type: 'unit_acted' });
                   uiRef.current = { type: 'unit_acted' };
@@ -552,6 +628,29 @@ export default function Battle() {
         return;
       }
 
+      // ── Hero attack (click on hero's adjacent hex) ──
+      const enemyPid = cu.playerId === 0 ? 1 : 0;
+      const clickedHeroAdj = HERO_ADJACENT[enemyPid].some(h => h.col === col && h.row === row);
+      if (clickedHeroAdj && canAttackHero(state, cu.uid, enemyPid).valid) {
+        {
+          setUI({ type: 'animating' });
+          uiRef.current = { type: 'animating' };
+          scene.clearHighlights();
+
+          const heroResult = executeHeroAttack(state, cu.uid, enemyPid);
+          scene.showHeroDamage(enemyPid, heroResult.damage, heroResult.isCrit);
+          syncUI();
+          resetTimer();
+
+          if (handleWinCheck()) return;
+
+          scheduleAutoEnd();
+          setUI({ type: 'unit_acted' });
+          uiRef.current = { type: 'unit_acted' };
+          return;
+        }
+      }
+
       // ── Move (not clicking enemy) ──
       if (currentUI.type === 'unit_acted') return;
       if (!canMove(state, cu.uid, { col, row }).valid) return;
@@ -562,9 +661,9 @@ export default function Battle() {
 
       const path = executeMove(state, cu.uid, { col, row });
       scene.moveUnit(cu.uid, path, () => {
-        // After move: stay in unit_turn (not unit_acted) so player can keep moving
         setUI({ type: 'unit_turn' });
         uiRef.current = { type: 'unit_turn' };
+        resetTimer();
         if (cu.remainingAp > 0) {
           showActiveUnitHL();
         } else {
@@ -577,6 +676,85 @@ export default function Battle() {
     window.addEventListener('hex-click', handler);
     return () => window.removeEventListener('hex-click', handler);
   }, [getActivePlayer, advanceTurn, showActiveUnitHL, syncUI, scheduleAutoEnd]);
+
+  // ─── Offgrid click (hero targeting) ─────────────────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { worldX, worldY } = (e as CustomEvent).detail;
+      const ctrl = ctrlRef.current;
+      const scene = sceneRef.current;
+      if (!ctrl || !scene || gameOverRef.current) return;
+      const currentUI = uiRef.current;
+      if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
+
+      const cu = ctrl.getCurrentUnit();
+      if (!cu) return;
+      const state = ctrl.getState();
+      const enemyPid = cu.playerId === 0 ? 1 : 0;
+
+      if (!canAttackHero(state, cu.uid, enemyPid).valid) return;
+
+      const heroPos = scene.getHeroWorldPos(enemyPid);
+      const clickDist = Math.sqrt((worldX - heroPos.x) ** 2 + (worldY - heroPos.y) ** 2);
+      if (clickDist > HEX_SIZE * 1.2) return;
+
+      setUI({ type: 'animating' });
+      uiRef.current = { type: 'animating' };
+      scene.clearHighlights();
+
+      const heroResult = executeHeroAttack(state, cu.uid, enemyPid);
+      scene.showHeroDamage(enemyPid, heroResult.damage, heroResult.isCrit);
+      syncUI();
+      resetTimer();
+
+      if (handleWinCheck()) return;
+
+      scheduleAutoEnd();
+      setUI({ type: 'unit_acted' });
+      uiRef.current = { type: 'unit_acted' };
+    };
+
+    window.addEventListener('offgrid-click', handler);
+    return () => window.removeEventListener('offgrid-click', handler);
+  }, [syncUI, resetTimer, handleWinCheck, scheduleAutoEnd]);
+
+  // ─── Activation timer ──────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (gameOverRef.current) return;
+      const ctrl = ctrlRef.current;
+      const scene = sceneRef.current;
+      if (!ctrl || !scene) return;
+      const currentUI = uiRef.current;
+      const currentPhase = phaseRef.current;
+
+      if (currentPhase.type === 'priority') return;
+      if (currentUI.type === 'animating') return;
+      if (currentUI.type === 'pick_card') return;
+
+      timerRef.current -= 1;
+      const t = timerRef.current;
+      setTimer(t);
+
+      if (t <= 0) {
+        const cu = ctrl.getCurrentUnit();
+        if (!cu) return;
+
+        const result = applyTimeoutDamage(ctrl.getState(), cu.playerId);
+        scene.showStampDamage(cu.playerId, result.damage);
+        syncUI();
+
+        if (handleWinCheck()) return;
+
+        ctrl.passActivation();
+        scene.clearHighlights();
+        resetTimer();
+        advanceTurn();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [syncUI, handleWinCheck, advanceTurn, resetTimer]);
 
   // ─── Engine init ────────────────────────────────────
   useEffect(() => {
@@ -599,6 +777,7 @@ export default function Battle() {
 
       const scene = new BattleScene(engine);
       scene.createGrid();
+      scene.createHeroMarkers();
       await scene.preloadSheep();
       sceneRef.current = scene;
 
@@ -614,7 +793,6 @@ export default function Battle() {
       engine.camera.zoom = 0.9;
       engine.camera.dirty = true;
 
-      // Click → hex-click event with worldX, worldY for cursor direction
       engine.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
         if (e.button !== 0) return;
         const rect = engine!.canvas.getBoundingClientRect();
@@ -627,6 +805,10 @@ export default function Battle() {
         if (isValidCell(h.col, h.row)) {
           window.dispatchEvent(new CustomEvent('hex-click', {
             detail: { col: h.col, row: h.row, worldX: w.x, worldY: w.y },
+          }));
+        } else {
+          window.dispatchEvent(new CustomEvent('offgrid-click', {
+            detail: { worldX: w.x, worldY: w.y },
           }));
         }
       });
@@ -700,9 +882,16 @@ export default function Battle() {
               <span>{statusText}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* P1 stats */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#6699ff', fontSize: 'var(--text-xs)' }}>P1</span>
-                <div style={{ width: 80 }}>
+                <div style={{ width: 60 }}>
+                  <ArcanaBar value={heroHp[0]} max={HERO_HP} color={heroHp[0] <= 10 ? 'red' : 'green'}>
+                    <span style={{ fontSize: 'var(--text-xs)' }}>{heroHp[0]}</span>
+                  </ArcanaBar>
+                </div>
+                {!barrierState[0] && <span style={{ color: '#ff4444', fontSize: '10px' }}>&#9888;</span>}
+                <div style={{ width: 50 }}>
                   <ArcanaBar value={mana[0]} max={12} color="blue">
                     <span style={{ fontSize: 'var(--text-xs)' }}>{mana[0]}</span>
                   </ArcanaBar>
@@ -712,9 +901,33 @@ export default function Battle() {
                   style={{ cursor: 'pointer', color: '#6699ff', fontSize: 'var(--text-xs)', opacity: 0.6 }}
                 >+5</span>
               </div>
+
+              {/* Timer */}
+              {!isPriority && !gameOver && (
+                <div style={{ width: 60 }}>
+                  <ArcanaBar
+                    value={timer}
+                    max={ACTIVATION_TIMER_SECONDS}
+                    color={timer <= 10 ? 'red' : timer <= 20 ? 'yellow' : 'blue'}
+                  >
+                    <span style={{
+                      fontSize: 'var(--text-xs)',
+                      animation: timer <= 10 ? 'pulse 0.5s infinite' : undefined,
+                    }}>{timer}s</span>
+                  </ArcanaBar>
+                </div>
+              )}
+
+              {/* P2 stats */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#ff6666', fontSize: 'var(--text-xs)' }}>P2</span>
-                <div style={{ width: 80 }}>
+                <div style={{ width: 60 }}>
+                  <ArcanaBar value={heroHp[1]} max={HERO_HP} color={heroHp[1] <= 10 ? 'red' : 'green'}>
+                    <span style={{ fontSize: 'var(--text-xs)' }}>{heroHp[1]}</span>
+                  </ArcanaBar>
+                </div>
+                {!barrierState[1] && <span style={{ color: '#ff4444', fontSize: '10px' }}>&#9888;</span>}
+                <div style={{ width: 50 }}>
                   <ArcanaBar value={mana[1]} max={12} color="blue">
                     <span style={{ fontSize: 'var(--text-xs)' }}>{mana[1]}</span>
                   </ArcanaBar>
@@ -772,6 +985,35 @@ export default function Battle() {
           display: 'flex', gap: 10, zIndex: 101,
         }}>
           <ArcanaButton variant="blue" size="sm" onClick={onPass}>Pass</ArcanaButton>
+        </div>
+      )}
+
+      {/* ─── Game Over Overlay ──────────────────── */}
+      {gameOver && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.7)',
+        }}>
+          <ArcanaPanel variant="slate">
+            <div style={{
+              padding: '24px 48px', textAlign: 'center',
+              fontFamily: 'var(--font-display)', color: 'var(--color-text)',
+            }}>
+              <div style={{
+                fontSize: '32px', color: 'var(--color-gold)',
+                marginBottom: 12,
+              }}>
+                P{gameOver.winner + 1} WINS!
+              </div>
+              <div style={{ fontSize: 'var(--text-sm)', marginBottom: 16, opacity: 0.8 }}>
+                The opposing hero has fallen.
+              </div>
+              <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
+                New Battle
+              </ArcanaButton>
+            </div>
+          </ArcanaPanel>
         </div>
       )}
 

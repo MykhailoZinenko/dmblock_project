@@ -5,9 +5,11 @@ import { getCard, isBuilding } from '../cardRegistry';
 import { hexDistance } from '../hexUtils';
 import { applyDamage } from '../combat';
 import { GRID_COLS, GRID_ROWS } from '../constants';
+import { HERO_HEX, HERO_ADJACENT, isBarrierUp } from './heroActions';
 import type { SeededRNG } from '../rng';
 
 const HEALING_CARD_ID = 10;
+const STATUS_ONLY_IDS = new Set([15, 16]); // Polymorph, Curse
 
 export interface CastResult {
   success: boolean;
@@ -18,6 +20,11 @@ export interface CastResult {
     statusApplied?: 'slow' | 'polymorph' | 'curse';
     died?: boolean;
   }[];
+  heroDamage?: {
+    playerId: number;
+    damage: number;
+    heroDied: boolean;
+  };
 }
 
 export function getSpellTargets(
@@ -30,6 +37,8 @@ export function getSpellTargets(
 
   const targets: HexCoord[] = [];
 
+  const isDamageSpell = card.spellPower > 0 && !STATUS_ONLY_IDS.has(cardId);
+
   if (card.spellTargetType === SpellTargetType.SINGLE) {
     const isHeal = cardId === HEALING_CARD_ID;
     for (const unit of state.units) {
@@ -38,10 +47,26 @@ export function getSpellTargets(
       if (!isHeal && unit.playerId === playerId) continue;
       targets.push({ col: unit.col, row: unit.row });
     }
+    // Exposed enemy hero is a valid target for damage spells
+    if (isDamageSpell && !isHeal) {
+      const enemyPid = playerId === 0 ? 1 : 0;
+      if (!isBarrierUp(state, enemyPid)) {
+        const hh = HERO_HEX[enemyPid];
+        targets.push({ col: hh.col, row: hh.row });
+      }
+    }
   } else if (card.spellTargetType === SpellTargetType.AREA) {
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
         targets.push({ col: c, row: r });
+      }
+    }
+    // Include hero hex for AoE if barrier down
+    if (isDamageSpell) {
+      const enemyPid = playerId === 0 ? 1 : 0;
+      if (!isBarrierUp(state, enemyPid)) {
+        const hh = HERO_HEX[enemyPid];
+        targets.push({ col: hh.col, row: hh.row });
       }
     }
   }
@@ -122,6 +147,24 @@ function applyStatus(
   }
 }
 
+function checkHeroSpellHit(
+  state: GameState,
+  casterId: number,
+  targetHex: HexCoord,
+  spellPower: number,
+): CastResult['heroDamage'] | null {
+  const enemyPid = casterId === 0 ? 1 : 0;
+  const hh = HERO_HEX[enemyPid];
+  if (targetHex.col !== hh.col || targetHex.row !== hh.row) return null;
+  if (isBarrierUp(state, enemyPid)) return null;
+
+  const damage = Math.max(1, spellPower);
+  state.players[enemyPid].heroHp -= damage;
+  const heroDied = state.players[enemyPid].heroHp <= 0;
+  if (heroDied) state.players[enemyPid].heroHp = 0;
+  return { playerId: enemyPid, damage, heroDied };
+}
+
 export function executeCast(
   state: GameState,
   playerId: number,
@@ -146,6 +189,12 @@ export function executeCast(
       affected.push({ uid: target.uid, healed });
     }
   } else if (card.spellTargetType === SpellTargetType.SINGLE && targetHex) {
+    // Check if targeting hero hex
+    const heroHit = checkHeroSpellHit(state, playerId, targetHex, card.spellPower);
+    if (heroHit) {
+      return { success: true, affectedUnits: affected, heroDamage: heroHit };
+    }
+
     const target = state.units.find(u => u.alive && u.col === targetHex.col && u.row === targetHex.row);
     if (target) {
       if (card.spellPower > 0) {
@@ -164,6 +213,7 @@ export function executeCast(
       }
     }
   } else if (card.spellTargetType === SpellTargetType.AREA && targetHex) {
+    let heroDamageResult: CastResult['heroDamage'];
     for (const unit of state.units) {
       if (!unit.alive || unit.playerId === playerId) continue;
       const dist = hexDistance(targetHex.col, targetHex.row, unit.col, unit.row);
@@ -172,6 +222,20 @@ export function executeCast(
         affected.push({ uid: unit.uid, damage, died });
       }
     }
+    // AoE can hit exposed hero if hero hex or adjacent hex is in range
+    const enemyPid = playerId === 0 ? 1 : 0;
+    if (!isBarrierUp(state, enemyPid)) {
+      const hh = HERO_HEX[enemyPid];
+      const dist = hexDistance(targetHex.col, targetHex.row, hh.col, hh.row);
+      if (dist <= 1) {
+        const damage = Math.max(1, card.spellPower);
+        state.players[enemyPid].heroHp -= damage;
+        const heroDied = state.players[enemyPid].heroHp <= 0;
+        if (heroDied) state.players[enemyPid].heroHp = 0;
+        heroDamageResult = { playerId: enemyPid, damage, heroDied };
+      }
+    }
+    return { success: true, affectedUnits: affected, heroDamage: heroDamageResult };
   }
 
   return { success: true, affectedUnits: affected };

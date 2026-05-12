@@ -65,7 +65,6 @@ describe('canSpawn', () => {
 
   it('hex occupied returns invalid', () => {
     const state = stateWithMana(42, 10, 10);
-    // Place a unit first
     state.board[0][0].unitUid = 99;
     const result = canSpawn(state, 0, 0, { col: 0, row: 0 });
     expect(result.valid).toBe(false);
@@ -119,7 +118,6 @@ describe('canSpawn', () => {
 
   it('2x2 building: one cell occupied returns invalid', () => {
     const state = stateWithMana(42, 10, 10);
-    // Occupy one of the 4 cells
     state.board[1][1].unitUid = 50;
     const result = canSpawn(state, 0, 18, { col: 0, row: 0 });
     expect(result.valid).toBe(false);

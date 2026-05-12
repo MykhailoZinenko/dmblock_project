@@ -19,9 +19,11 @@ const COLOR_FILTERS: Record<string, string> = {
   red: 'none',
   blue: 'hue-rotate(200deg) saturate(1.2)',
   gold: 'hue-rotate(40deg) saturate(0.8) brightness(1.2)',
+  green: 'hue-rotate(100deg) saturate(1.0)',
+  yellow: 'hue-rotate(50deg) saturate(1.3) brightness(1.1)',
 };
 
-type BarColor = 'red' | 'blue' | 'gold';
+type BarColor = 'red' | 'blue' | 'gold' | 'green' | 'yellow';
 
 interface ArcanaBarProps {
   value?: number;

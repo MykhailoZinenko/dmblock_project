@@ -17,7 +17,9 @@ import {
   P1_DEPLOY_COLS, P2_DEPLOY_COLS,
   UNIT_MOVE_SPEED,
   HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_Y_OFFSET,
+  HERO_HP,
 } from './constants';
+import { HERO_HEX, HERO_ADJACENT } from './actions/heroActions';
 
 export interface AttackableTarget {
   unitUid: number;
@@ -35,13 +37,24 @@ interface UnitEntry {
   maxHp: number;
 }
 
+interface HeroMarkerEntry {
+  playerId: number;
+  container: Container;
+  hpBar: Graphics;
+  barrierGfx: Graphics;
+  label: Text;
+}
+
 export class BattleScene {
   private engine: Engine;
   private gridLayer: Container;
   private hlLayer: Container;
   private unitLayer: Container;
+  private uiLayer: Container;
   private hlGfx: Graphics;
   private units: Map<number, UnitEntry> = new Map();
+  private heroMarkers: Map<number, HeroMarkerEntry> = new Map();
+  private vignetteGfx: Graphics | null = null;
 
   constructor(engine: Engine) {
     this.engine = engine;
@@ -52,10 +65,13 @@ export class BattleScene {
     this.hlLayer.zIndex = 5;
     this.unitLayer = new Container();
     this.unitLayer.zIndex = 10;
+    this.uiLayer = new Container();
+    this.uiLayer.zIndex = 20;
 
     engine.stage.addChild(this.gridLayer);
     engine.stage.addChild(this.hlLayer);
     engine.stage.addChild(this.unitLayer);
+    engine.stage.addChild(this.uiLayer);
 
     this.hlGfx = new Graphics();
     this.hlLayer.addChild(this.hlGfx);
@@ -468,6 +484,192 @@ export class BattleScene {
     entry.anim.playIdle();
   }
 
+  // ── Hero Markers ─────────────────────────────────────
+
+  getHeroWorldPos(playerId: number): { x: number; y: number } {
+    const h = HERO_HEX[playerId];
+    return hex2px(h.col, h.row);
+  }
+
+  createHeroMarkers(): void {
+    for (const pid of [0, 1]) {
+      const pos = this.getHeroWorldPos(pid);
+      const container = new Container();
+      container.position.set(pos.x, pos.y);
+
+      // Render the hero hex cell
+      const hexGfx = new Graphics();
+      hexGfx.lineStyle(2, pid === 0 ? 0x3366cc : 0xcc3344);
+      hexGfx.beginFill(pid === 0 ? 0x224488 : 0x882244, 0.5);
+      hexGfx.drawRegularPolygon(0, 0, HEX_SIZE - 2, 6);
+      hexGfx.endFill();
+      container.addChild(hexGfx);
+
+      // Hero pillar icon (circle inside hex)
+      const body = new Graphics();
+      body.lineStyle(2, pid === 0 ? 0x4488ff : 0xff4466);
+      body.beginFill(pid === 0 ? 0x224488 : 0x882244, 0.8);
+      body.drawCircle(0, 0, HEX_SIZE * 0.4);
+      body.endFill();
+      container.addChild(body);
+
+      const lbl = new Text(pid === 0 ? 'P1' : 'P2', {
+        fontSize: 20,
+        fill: 0xffffff,
+      });
+      lbl.position.set(-10, -12);
+      container.addChild(lbl);
+
+      const hpBar = new Graphics();
+      this.drawHeroHpBar(hpBar, HERO_HP, HERO_HP);
+      hpBar.position.set(0, HEX_SIZE * 0.9);
+      container.addChild(hpBar);
+
+      const barrierGfx = new Graphics();
+      this.drawBarrierShield(barrierGfx, pid);
+      container.addChild(barrierGfx);
+
+      this.gridLayer.addChild(container);
+      this.heroMarkers.set(pid, { playerId: pid, container, hpBar, barrierGfx, label: lbl });
+    }
+  }
+
+  updateHeroHp(playerId: number, currentHp: number, maxHp: number): void {
+    const marker = this.heroMarkers.get(playerId);
+    if (!marker) return;
+    this.drawHeroHpBar(marker.hpBar, currentHp, maxHp);
+  }
+
+  showBarrierDown(playerId: number): void {
+    const marker = this.heroMarkers.get(playerId);
+    if (!marker) return;
+    marker.barrierGfx.visible = false;
+
+    const pos = this.getHeroWorldPos(playerId);
+    const txt = new Text('BARRIER DOWN!', { fontSize: 20, fill: 0xff4444 });
+    txt.position.set(pos.x - 50, pos.y - HEX_SIZE * 1.5);
+    this.unitLayer.addChild(txt);
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      txt.position.y -= 25 * dt;
+      txt.alpha = Math.max(0, 1 - t * 0.5);
+      if (t > 2) {
+        this.engine.ticker.remove(fn);
+        this.unitLayer.removeChild(txt);
+      }
+    };
+    this.engine.ticker.add(fn);
+  }
+
+  showHeroDamage(playerId: number, damage: number, isCrit: boolean): void {
+    const pos = this.getHeroWorldPos(playerId);
+    const txt = new Text(`${isCrit ? 'CRIT ' : ''}${damage}`, {
+      fontSize: isCrit ? 26 : 22,
+      fill: 0xff4444,
+    });
+    txt.position.set(pos.x - 15, pos.y - HEX_SIZE * 1.2);
+    this.unitLayer.addChild(txt);
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      txt.position.y -= 40 * dt;
+      txt.alpha = Math.max(0, 1 - t);
+      if (t > 1) {
+        this.engine.ticker.remove(fn);
+        this.unitLayer.removeChild(txt);
+      }
+    };
+    this.engine.ticker.add(fn);
+  }
+
+  showStampDamage(playerId: number, damage: number): void {
+    this.showHeroDamage(playerId, damage, false);
+
+    const pos = this.getHeroWorldPos(playerId);
+    const stampTxt = new Text('STAMP!', { fontSize: 18, fill: 0xf1c40f });
+    stampTxt.position.set(pos.x - 25, pos.y - HEX_SIZE * 1.8);
+    this.unitLayer.addChild(stampTxt);
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      stampTxt.position.y -= 20 * dt;
+      stampTxt.alpha = Math.max(0, 1 - t * 0.7);
+      if (t > 1.4) {
+        this.engine.ticker.remove(fn);
+        this.unitLayer.removeChild(stampTxt);
+      }
+    };
+    this.engine.ticker.add(fn);
+
+    this.showVignetteFlash();
+  }
+
+  showVignetteFlash(): void {
+    if (this.vignetteGfx) return;
+    const gfx = new Graphics();
+    gfx.beginFill(0xff0000, 0.2);
+    gfx.drawRect(-5000, -5000, 10000, 10000);
+    gfx.endFill();
+    this.uiLayer.addChild(gfx);
+    this.vignetteGfx = gfx;
+
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      gfx.alpha = Math.max(0, 1 - t * 2);
+      if (t > 0.5) {
+        this.engine.ticker.remove(fn);
+        this.uiLayer.removeChild(gfx);
+        this.vignetteGfx = null;
+      }
+    };
+    this.engine.ticker.add(fn);
+  }
+
+  showHeroAttackHighlight(targetPlayerId: number): void {
+    const marker = this.heroMarkers.get(targetPlayerId);
+    if (!marker) return;
+    const pos = this.getHeroWorldPos(targetPlayerId);
+    this.hlGfx.lineStyle(3, 0xe74c3c);
+    this.hlGfx.beginFill(0xe74c3c, 0.2);
+    this.hlGfx.drawCircle(pos.x, pos.y, HEX_SIZE * 0.8);
+    this.hlGfx.endFill();
+  }
+
+  private drawBarrierShield(gfx: Graphics, playerId: number): void {
+    const color = playerId === 0 ? 0x4488ff : 0xff4466;
+    gfx.lineStyle(2, color, 0.6);
+    gfx.beginFill(color, 0.1);
+    gfx.drawCircle(0, 0, HEX_SIZE * 0.9);
+    gfx.endFill();
+  }
+
+  private drawHeroHpBar(gfx: Graphics, currentHp: number, maxHp: number): void {
+    gfx.clear();
+    const ratio = maxHp > 0 ? Math.max(0, Math.min(1, currentHp / maxHp)) : 0;
+    const w = HP_BAR_WIDTH * 1.2;
+    const h = HP_BAR_HEIGHT + 2;
+    const x = -w / 2;
+
+    gfx.lineStyle(1, 0x111111);
+    gfx.beginFill(0x1a1a1a, 0.8);
+    gfx.drawRect(x - 1, -1, w + 2, h + 2);
+    gfx.endFill();
+
+    let color = 0x2ecc71;
+    if (ratio <= 0.25) color = 0xe74c3c;
+    else if (ratio <= 0.5) color = 0xf1c40f;
+
+    const fillW = w * ratio;
+    if (fillW > 0) {
+      gfx.lineStyle(0);
+      gfx.beginFill(color, 1);
+      gfx.drawRect(x, 0, fillW, h);
+      gfx.endFill();
+    }
+  }
+
   // ── Cleanup ──────────────────────────────────────────
 
   destroy(): void {
@@ -475,9 +677,11 @@ export class BattleScene {
       entry.anim.destroy();
     }
     this.units.clear();
+    this.heroMarkers.clear();
     this.engine.stage.removeChild(this.gridLayer);
     this.engine.stage.removeChild(this.hlLayer);
     this.engine.stage.removeChild(this.unitLayer);
+    this.engine.stage.removeChild(this.uiLayer);
   }
 
   // ── Private ──────────────────────────────────────────
