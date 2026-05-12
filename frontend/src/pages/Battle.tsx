@@ -38,6 +38,7 @@ interface PriorityState {
   p0Used: boolean;
   p1Used: boolean;
   spawnedThisTurn: Set<number>;
+  activatedThisTurn: Set<number>;
 }
 
 export default function Battle() {
@@ -48,7 +49,7 @@ export default function Battle() {
 
   const [phase, setPhase] = useState<TurnPhase>({ type: 'priority', player: 0 });
   const [ui, setUI] = useState<UIMode>({ type: 'pick_card' });
-  const [priority, setPriority] = useState<PriorityState>({ p0Used: false, p1Used: false, spawnedThisTurn: new Set() });
+  const [priority, setPriority] = useState<PriorityState>({ p0Used: false, p1Used: false, spawnedThisTurn: new Set(), activatedThisTurn: new Set() });
   const [mana, setMana] = useState([STARTING_MANA, STARTING_MANA]);
   const [turn, setTurn] = useState(1);
   const [queueInfo, setQueueInfo] = useState<{ labels: string[]; index: number }>({ labels: [], index: 0 });
@@ -114,6 +115,15 @@ export default function Battle() {
     scene.showMoveHighlights({ col: cu.col, row: cu.row }, reachable, attackable);
   }, []);
 
+  const trackActivated = useCallback((uid: number) => {
+    const prev = prioRef.current;
+    const newActivated = new Set(prev.activatedThisTurn);
+    newActivated.add(uid);
+    const newPrio = { ...prev, activatedThisTurn: newActivated };
+    setPriority(newPrio);
+    prioRef.current = newPrio;
+  }, []);
+
   const scheduleAutoEnd = useCallback(() => {
     const ctrl = ctrlRef.current;
     const engine = engineRef.current;
@@ -126,6 +136,7 @@ export default function Battle() {
       elapsed += dt;
       if (elapsed >= AUTO_END_DELAY) {
         engine.ticker.remove(tick);
+        trackActivated(cu.uid);
         ctrl.passActivation();
         sceneRef.current?.clearHighlights();
         advanceTurn();
@@ -172,14 +183,17 @@ export default function Battle() {
     setPhase({ type: 'initiative' });
     phaseRef.current = { type: 'initiative' };
 
-    if (!wasAlreadyInitiative && prio.spawnedThisTurn.size > 0) {
-      state.activationQueue = state.activationQueue.filter(u => !prio.spawnedThisTurn.has(u.uid));
-      state.currentActivationIndex = 0;
+    if (!wasAlreadyInitiative) {
+      const skipUids = new Set([...prio.spawnedThisTurn, ...prio.activatedThisTurn]);
+      if (skipUids.size > 0) {
+        state.activationQueue = state.activationQueue.filter(u => !skipUids.has(u.uid));
+        state.currentActivationIndex = 0;
+      }
     }
 
     if (ctrl.isQueueExhausted()) {
       ctrl.endTurn();
-      const newPrio: PriorityState = { p0Used: false, p1Used: false, spawnedThisTurn: new Set() };
+      const newPrio: PriorityState = { p0Used: false, p1Used: false, spawnedThisTurn: new Set(), activatedThisTurn: new Set() };
       setPriority(newPrio);
       prioRef.current = newPrio;
       setPhase({ type: 'priority', player: 0 });
@@ -233,10 +247,12 @@ export default function Battle() {
   const onPass = useCallback(() => {
     const ctrl = ctrlRef.current;
     if (!ctrl) return;
+    const cu = ctrl.getCurrentUnit();
+    if (cu) trackActivated(cu.uid);
     ctrl.passActivation();
     sceneRef.current?.clearHighlights();
     advanceTurn();
-  }, [advanceTurn]);
+  }, [advanceTurn, trackActivated]);
 
   // ─── Hex click handler ──────────────────────────────
   useEffect(() => {
@@ -266,10 +282,11 @@ export default function Battle() {
           const prev = prioRef.current;
           const newSpawned = new Set(prev.spawnedThisTurn);
           newSpawned.add(unit.uid);
-          const newPrio = {
+          const newPrio: PriorityState = {
             p0Used: player === 0 ? true : prev.p0Used,
             p1Used: player === 1 ? true : prev.p1Used,
             spawnedThisTurn: newSpawned,
+            activatedThisTurn: prev.activatedThisTurn,
           };
           setPriority(newPrio);
           prioRef.current = newPrio;
