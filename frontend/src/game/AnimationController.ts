@@ -10,6 +10,7 @@ import {
   buildingSpriteConfigs,
   getAnimForState,
   getAttackAnim,
+  sheepSpriteConfig,
   type AnimState,
   type AnimDefinition,
   type UnitSpriteConfig,
@@ -130,6 +131,38 @@ export class AnimationController {
       };
       this.engine.ticker.add(tick);
     });
+  }
+
+  async swapToSheep(): Promise<void> {
+    const anim = getAnimForState(sheepSpriteConfig, 'idle');
+    if (!anim) return;
+
+    const cacheKey = 'sheep_idle';
+    let frames = this.textureCache.get(cacheKey);
+    if (!frames) {
+      const tex = await this.engine.textures.load('sheep_idle', `${sheepSpriteConfig.basePath}/${anim.file}`);
+      frames = SpriteSheet.fromStrip(tex, anim.frameWidth);
+      this.textureCache.set(cacheKey, frames);
+    }
+
+    if (this.sprite) {
+      this.sprite.stop();
+      this.container.removeChild(this.sprite);
+    }
+
+    const spr = new AnimatedSprite(frames);
+    spr.anchor.set(0.5, 0.75);
+    const s = UNIT_TARGET_HEIGHT / anim.frameHeight;
+    spr.scale.set(s, s);
+    spr.animationSpeed = 0.12;
+    spr.loop = true;
+    spr.gotoAndPlay(0);
+    this.sprite = spr;
+    this.container.addChild(spr);
+  }
+
+  async restoreFromSheep(): Promise<void> {
+    await this.playIdle();
   }
 
   destroy(): void {
