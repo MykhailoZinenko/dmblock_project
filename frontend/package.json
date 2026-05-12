@@ -8,6 +8,8 @@
     "sync-abi": "node scripts/sync-abi.mjs",
     "update-twap": "node scripts/update-twap.mjs",
     "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "preview": "vite preview"
   },
