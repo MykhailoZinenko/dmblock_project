@@ -117,22 +117,23 @@ export class GameController {
   endTurn(): void {
     this.state.turnNumber++;
 
+    // Expire status effects FIRST — before AP reset, mana, queue rebuild
+    const expiredUids = tickStatusEffects(this.state);
+    for (const uid of expiredUids) {
+      this.emit('effectExpired', { uid });
+    }
+
     // Add mana (capped)
     for (const player of this.state.players) {
       player.mana = Math.min(player.mana + MANA_PER_TURN, MANA_CAP);
     }
 
-    // Reset alive units
+    // Reset alive units (after effects cleared so speed is restored)
     for (const unit of this.state.units) {
       if (unit.alive) {
         unit.remainingAp = unit.speed;
         unit.retaliatedThisTurn = false;
       }
-    }
-
-    const expiredUids = tickStatusEffects(this.state);
-    for (const uid of expiredUids) {
-      this.emit('effectExpired', { uid });
     }
 
     // Rebuild queue
