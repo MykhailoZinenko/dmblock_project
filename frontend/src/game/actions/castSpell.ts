@@ -116,6 +116,11 @@ function applyStatus(
     unit.defense = Math.floor(unit.defense / 2);
     unit.cursed = true;
   }
+
+  // Cap remaining AP to new speed so effects apply immediately this turn
+  if (unit.remainingAp > unit.speed) {
+    unit.remainingAp = unit.speed;
+  }
 }
 
 export function executeCast(
