@@ -704,5 +704,34 @@ export const DuelManagerAbi = [
     "type": "error",
     "name": "WinnerNotParticipant",
     "inputs": []
+  },
+  {
+    "type": "function",
+    "name": "arbiter",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setArbiter",
+    "inputs": [{ "name": "arbiter_", "type": "address", "internalType": "address" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "arbiterSettle",
+    "inputs": [
+      { "name": "duelId", "type": "uint256", "internalType": "uint256" },
+      { "name": "winner", "type": "address", "internalType": "address" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "NotArbiter",
+    "inputs": []
   }
 ] as const;
