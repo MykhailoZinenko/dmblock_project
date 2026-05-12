@@ -50,6 +50,8 @@ export class MatchManager {
   private opponentDeckHash: string | null = null;
   private opponentDeck: number[] | null = null;
   private deckResolve: ((deck: number[]) => void) | null = null;
+  /** Opponent's deck-hash received before `exchangeDecks` ran (still had myDeck=[]). */
+  private pendingOpponentHash: string | null = null;
 
   private timerHandle: ReturnType<typeof setTimeout> | null = null;
   private activationStartTime = 0;
@@ -107,13 +109,17 @@ export class MatchManager {
     this.myDeck = myDeck;
     this.setPhase("exchanging-decks");
 
-    // Send our deck hash first (commit phase)
-    const hash = this.simpleHash(JSON.stringify(myDeck));
-    this.conn.send({ type: "deck-hash", hash });
-
-    // Wait for opponent's deck reveal
     const opponentDeck = await new Promise<number[]>((resolve) => {
       this.deckResolve = resolve;
+
+      const hash = this.simpleHash(JSON.stringify(myDeck));
+      this.conn.send({ type: "deck-hash", hash });
+
+      if (this.pendingOpponentHash !== null) {
+        this.opponentDeckHash = this.pendingOpponentHash;
+        this.pendingOpponentHash = null;
+        this.conn.send({ type: "deck-reveal", deck: this.myDeck });
+      }
     });
 
     return { myDeck, opponentDeck };
@@ -263,6 +269,10 @@ export class MatchManager {
   private handlePeerMessage(msg: PeerMessage): void {
     switch (msg.type) {
       case "deck-hash":
+        if (this.myDeck.length === 0) {
+          this.pendingOpponentHash = msg.hash;
+          break;
+        }
         this.opponentDeckHash = msg.hash;
         // Now reveal our deck to the opponent
         this.conn.send({ type: "deck-reveal", deck: this.myDeck });

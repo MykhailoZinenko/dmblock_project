@@ -932,13 +932,25 @@ export default function Battle() {
     const conn = new ConnectionManager('ws://localhost:3001');
     connRef.current = conn;
 
+    const match = new MatchManager(conn);
+    matchRef.current = match;
+
     conn.on('paired', () => {
       setMultiplayerStatus('Connected to opponent. Exchanging decks...');
     });
 
     conn.on('connected', async () => {
-      const ctrl = ctrlRef.current;
-      if (!ctrl) return;
+      const deadline = Date.now() + 30_000;
+      let ctrl: GameController | null = null;
+      while (Date.now() < deadline) {
+        ctrl = ctrlRef.current;
+        if (ctrl) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (!ctrl) {
+        setMultiplayerStatus('Game engine not ready — refresh the page.');
+        return;
+      }
 
       const decks = listDecks(address);
       const validDeck = decks.find((d) => d.slots.filter((s) => s !== null).length === DECK_SIZE);
@@ -948,9 +960,6 @@ export default function Battle() {
       }
 
       const myDeckIds = validDeck.slots.filter((s): s is number => s !== null);
-
-      const match = new MatchManager(conn);
-      matchRef.current = match;
 
       const { opponentDeck } = await match.exchangeDecks(myDeckIds);
       match.startGame(duelId, ctrl);
