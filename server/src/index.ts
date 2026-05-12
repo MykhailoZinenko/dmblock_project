@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { joinRoom, leaveRoom, getOpponent, type Room, type Player } from "./rooms.js";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
+import { initMatch, recordAction, reportGameOver, determineWinnerOnDisconnect, getMatch, cleanupMatch } from "./arbiter.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const wss = new WebSocketServer({ port: PORT });
@@ -39,6 +40,10 @@ wss.on("connection", (ws) => {
         if (opponent) {
           send(ws, { type: "paired", opponent: opponent.address, playerIndex: result.playerIndex });
           send(opponent.ws, { type: "paired", opponent: msg.address, playerIndex: opponent.index });
+          // Initialize arbiter match tracking
+          const p1 = result.playerIndex === 0 ? msg.address : opponent.address;
+          const p2 = result.playerIndex === 0 ? opponent.address : msg.address;
+          initMatch(msg.duelId, p1, p2);
         }
         break;
       }
@@ -49,6 +54,35 @@ wss.on("connection", (ws) => {
         const opponent = state.room ? getOpponent(state.room, state.playerIndex) : null;
         if (opponent) {
           send(opponent.ws, msg as ServerMessage);
+        }
+        break;
+      }
+
+      case "action": {
+        if (state.duelId !== null) {
+          recordAction(state.duelId, msg.action);
+        }
+        break;
+      }
+
+      case "sign-result": {
+        // Player reports game result with signature
+        if (state.duelId !== null) {
+          reportGameOver(state.duelId, msg.winner);
+        }
+        break;
+      }
+
+      case "request-arbiter": {
+        // Player requests server-side settlement
+        const match = state.duelId !== null ? getMatch(state.duelId) : undefined;
+        if (match && match.winner) {
+          send(ws, {
+            type: "arbiter-result",
+            duelId: msg.duelId,
+            winner: match.winner,
+            signature: "", // On-chain settlement would go here
+          });
         }
         break;
       }
@@ -66,8 +100,19 @@ wss.on("connection", (ws) => {
         const opponent = getOpponent(state.room, left.index);
         if (opponent) {
           send(opponent.ws, { type: "opponent-disconnected" });
+          // Determine winner on disconnect
+          const winner = determineWinnerOnDisconnect(state.duelId, left.address);
+          if (winner) {
+            send(opponent.ws, {
+              type: "arbiter-result",
+              duelId: state.duelId,
+              winner,
+              signature: "",
+            });
+          }
         }
       }
+      cleanupMatch(state.duelId);
     }
   });
 });
