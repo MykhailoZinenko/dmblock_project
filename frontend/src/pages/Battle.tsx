@@ -252,7 +252,9 @@ export default function Battle() {
 
     if (p0Needs && p1Needs) {
       const first = state.rng.rollPercent(50) ? 0 : 1;
-      setPhase({ type: 'priority', player: first });
+      const next: TurnPhase = { type: 'priority', player: first };
+      setPhase(next);
+      phaseRef.current = next;
       setUI({ type: 'pick_card' });
       uiRef.current = { type: 'pick_card' };
       sceneRef.current?.clearHighlights();
@@ -260,7 +262,9 @@ export default function Battle() {
       return;
     }
     if (p0Needs) {
-      setPhase({ type: 'priority', player: 0 });
+      const next: TurnPhase = { type: 'priority', player: 0 };
+      setPhase(next);
+      phaseRef.current = next;
       setUI({ type: 'pick_card' });
       uiRef.current = { type: 'pick_card' };
       sceneRef.current?.clearHighlights();
@@ -268,7 +272,9 @@ export default function Battle() {
       return;
     }
     if (p1Needs) {
-      setPhase({ type: 'priority', player: 1 });
+      const next: TurnPhase = { type: 'priority', player: 1 };
+      setPhase(next);
+      phaseRef.current = next;
       setUI({ type: 'pick_card' });
       uiRef.current = { type: 'pick_card' };
       sceneRef.current?.clearHighlights();
