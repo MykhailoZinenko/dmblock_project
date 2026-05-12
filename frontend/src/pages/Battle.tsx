@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Engine } from "../engine/Engine";
 import { Container } from "../engine/nodes/Container";
 import { Graphics } from "../engine/nodes/Graphics";
@@ -13,9 +13,21 @@ import {
   HERO_HP,
   STARTING_MANA,
 } from "../game/constants";
+import { CardPicker } from "../components/CardPicker";
 
 export default function Battle() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
+
+  const handleCardSelect = useCallback((cardId: number) => {
+    console.log('[CardPicker] selected card:', cardId);
+    setSelectedCardId(cardId);
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    console.log('[CardPicker] selection cancelled');
+    setSelectedCardId(null);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -191,6 +203,13 @@ export default function Battle() {
       >
         <strong>Battle</strong> | WASD: pan | Scroll: zoom
       </div>
+      <CardPicker
+        currentMana={STARTING_MANA}
+        onCardSelect={handleCardSelect}
+        selectedCardId={selectedCardId}
+        onCancel={handleCancel}
+        disabled={false}
+      />
     </div>
   );
 }
