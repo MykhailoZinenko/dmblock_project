@@ -383,14 +383,18 @@ export default function Battle() {
       setPriority(newPrio);
       prioRef.current = newPrio;
       sceneRef.current?.clearHighlights();
+      sendAction({ type: 'pass', priorityPhase: true, priorityPlayerId: player });
       advanceTurn();
       return;
     }
 
     const cu = ctrl.getCurrentUnit();
+    const releasedUid = cu?.uid;
     if (cu) trackActivated(cu.uid);
     ctrl.passActivation();
-    sendAction({ type: 'pass' });
+    sendAction(
+      releasedUid !== undefined ? { type: 'pass', releasedUnitUid: releasedUid } : { type: 'pass' },
+    );
     sceneRef.current?.clearHighlights();
     resetTimer();
     advanceTurn();
@@ -494,7 +498,14 @@ export default function Battle() {
 
         const unit = executeSpawn(state, player, currentUI.cardId, { col, row });
         scene.spawnUnit(unit);
-        sendAction({ type: 'spawn', playerId: player, cardId: currentUI.cardId, col, row });
+        sendAction({
+          type: 'spawn',
+          playerId: player,
+          cardId: currentUI.cardId,
+          col,
+          row,
+          priorityPhase: currentPhase.type === 'priority',
+        });
 
         if (currentPhase.type === 'priority') {
           ctrl.rebuildQueue();
@@ -975,15 +986,65 @@ export default function Battle() {
 
       match.on('opponent-action', (action: GameAction) => {
         const scene = sceneRef.current;
+        const ctrl = ctrlRef.current;
+        if (!scene || !ctrl) {
+          syncUI();
+          return;
+        }
         const state = ctrl.getState();
-        if (!scene) { syncUI(); return; }
 
         switch (action.type) {
           case 'spawn': {
-            const unit = state.units.find(u =>
-              u.alive && u.col === action.col && u.row === action.row,
+            const unit = state.units.find(
+              (u) => u.alive && u.col === action.col && u.row === action.row,
             );
-            if (unit) scene.spawnUnit(unit);
+            if (!unit) break;
+            scene.spawnUnit(unit);
+            const prev = prioRef.current;
+            const newSpawned = new Set(prev.spawnedThisTurn);
+            newSpawned.add(unit.uid);
+            if (action.priorityPhase) {
+              const newPrio: PriorityState = {
+                ...prev,
+                p0Used: action.playerId === 0 ? true : prev.p0Used,
+                p1Used: action.playerId === 1 ? true : prev.p1Used,
+                spawnedThisTurn: newSpawned,
+                activatedThisTurn: prev.activatedThisTurn,
+              };
+              setPriority(newPrio);
+              prioRef.current = newPrio;
+            } else {
+              const newPrio: PriorityState = { ...prev, spawnedThisTurn: newSpawned };
+              setPriority(newPrio);
+              prioRef.current = newPrio;
+            }
+            scene.clearHighlights();
+            advanceTurn();
+            break;
+          }
+          case 'pass': {
+            if (action.priorityPhase && action.priorityPlayerId !== undefined) {
+              const pid = action.priorityPlayerId;
+              const prev = prioRef.current;
+              const newPrio: PriorityState = {
+                ...prev,
+                p0Used: pid === 0 ? true : prev.p0Used,
+                p1Used: pid === 1 ? true : prev.p1Used,
+              };
+              setPriority(newPrio);
+              prioRef.current = newPrio;
+              scene.clearHighlights();
+            } else if (action.releasedUnitUid !== undefined) {
+              const prev = prioRef.current;
+              const newA = new Set(prev.activatedThisTurn);
+              newA.add(action.releasedUnitUid);
+              const newPrio: PriorityState = { ...prev, activatedThisTurn: newA };
+              setPriority(newPrio);
+              prioRef.current = newPrio;
+              scene.clearHighlights();
+              resetTimer();
+            }
+            advanceTurn();
             break;
           }
           case 'move': {
@@ -1055,7 +1116,7 @@ export default function Battle() {
       matchRef.current?.destroy();
       conn.disconnect();
     };
-  }, [duelId, address, isMultiplayer, syncUI]);
+  }, [duelId, address, isMultiplayer, syncUI, advanceTurn, resetTimer, handleWinCheck, checkBarrierChange]);
 
   // ─── Derived display values ─────────────────────────
   const activePlayer = getActivePlayer();

@@ -215,6 +215,11 @@ export class MatchManager {
             col: action.col,
             row: action.row,
           });
+          if (action.priorityPhase) {
+            this.ctrl.rebuildQueue();
+          } else {
+            this.ctrl.passActivation();
+          }
         }
         break;
       }
@@ -237,6 +242,10 @@ export class MatchManager {
         });
         break;
       case "pass":
+        if (action.priorityPhase) {
+          // Priority-round pass is UI/turn-order only; handled in Battle like the sender.
+          break;
+        }
         this.ctrl.passActivation();
         break;
       case "end-turn":

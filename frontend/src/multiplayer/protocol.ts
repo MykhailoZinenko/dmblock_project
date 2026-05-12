@@ -1,10 +1,24 @@
 export type GameAction =
-  | { type: 'spawn'; playerId: number; cardId: number; col: number; row: number }
+  | {
+      type: 'spawn';
+      playerId: number;
+      cardId: number;
+      col: number;
+      row: number;
+      /** Mirrors Battle phase: free deploy round vs initiative spawn. */
+      priorityPhase?: boolean;
+    }
   | { type: 'move'; unitUid: number; col: number; row: number }
   | { type: 'attack'; attackerUid: number; targetUid: number }
   | { type: 'attack-hero'; attackerUid: number; targetPlayerId: number }
   | { type: 'cast'; playerId: number; cardId: number; col: number; row: number }
-  | { type: 'pass' }
+  | {
+      type: 'pass';
+      /** Free-deploy pass — do not call `passActivation` on the controller. */
+      priorityPhase?: boolean;
+      priorityPlayerId?: number;
+      releasedUnitUid?: number;
+    }
   | { type: 'end-turn' };
 
 export type PeerMessage =
