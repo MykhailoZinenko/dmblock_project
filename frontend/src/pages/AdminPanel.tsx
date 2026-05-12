@@ -275,7 +275,12 @@ export default function AdminPanel() {
   const cardStats = useMemo(() => {
     const rows = cardStatsReads.data;
     if (!rows || rows.length < 7) return null;
-    const num = (i: number) => (rows[i]?.status === "success" ? rows[i].result as bigint : 0n);
+    const num = (i: number) => {
+      const r = rows[i];
+      if (r?.status !== "success") return 0n;
+      const v = r.result as unknown;
+      return typeof v === "bigint" ? v : BigInt((v as number | string | boolean) ?? 0);
+    };
     const minted   = num(0);
     const trades   = num(1);
     const lastWei  = num(2);
@@ -310,7 +315,12 @@ export default function AdminPanel() {
       const base = idx * 6;
       const cardRow = data[base];
       const card = isCardChainData(cardRow?.result) ? (cardRow!.result as CardChainData) : null;
-      const num = (i: number) => (data[base + i]?.status === "success" ? data[base + i].result as bigint : 0n);
+      const num = (i: number) => {
+        const r = data[base + i];
+        if (r?.status !== "success") return 0n;
+        const v = r.result as unknown;
+        return typeof v === "bigint" ? v : BigInt((v as number | string | boolean) ?? 0);
+      };
       const minted   = num(1);
       const trades   = num(2);
       const lastWei  = num(3);
