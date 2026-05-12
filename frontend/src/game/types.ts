@@ -105,6 +105,8 @@ export interface PlayerState {
   mana: number;
   heroHp: number;
   timeoutCount: number;
+  deck: number[];
+  hand: number[];
 }
 
 export interface BoardCell {

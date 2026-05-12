@@ -32,7 +32,7 @@ export interface GameState {
  * - Phase starts as INITIALIZING
  * - RNG initialized from seed
  */
-export function createGameState(seed: number): GameState {
+export function createGameState(seed: number, decks?: [number[], number[]]): GameState {
   const board: BoardCell[][] = [];
   for (let r = 0; r < GRID_ROWS; r++) {
     const row: BoardCell[] = [];
@@ -47,9 +47,25 @@ export function createGameState(seed: number): GameState {
     board.push(row);
   }
 
+  function shuffleDeck(deck: number[], rng: SeededRNG): number[] {
+    const arr = [...deck];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = rng.nextInt(0, i + 1);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  const rng = new SeededRNG(seed);
+  const STARTING_HAND_SIZE = 4;
+  const p0Deck = decks ? shuffleDeck(decks[0], rng) : [];
+  const p1Deck = decks ? shuffleDeck(decks[1], rng) : [];
+  const p0Hand = p0Deck.splice(0, STARTING_HAND_SIZE);
+  const p1Hand = p1Deck.splice(0, STARTING_HAND_SIZE);
+
   const players: [PlayerState, PlayerState] = [
-    { id: 0, mana: STARTING_MANA, heroHp: HERO_HP, timeoutCount: 0 },
-    { id: 1, mana: STARTING_MANA, heroHp: HERO_HP, timeoutCount: 0 },
+    { id: 0, mana: STARTING_MANA, heroHp: HERO_HP, timeoutCount: 0, deck: p0Deck, hand: p0Hand },
+    { id: 1, mana: STARTING_MANA, heroHp: HERO_HP, timeoutCount: 0, deck: p1Deck, hand: p1Hand },
   ];
 
   return {
@@ -60,7 +76,7 @@ export function createGameState(seed: number): GameState {
     activationQueue: [],
     currentActivationIndex: 0,
     phase: 'INITIALIZING',
-    rng: new SeededRNG(seed),
+    rng,
     nextUnitUid: 1,
   };
 }

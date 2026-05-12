@@ -27,8 +27,8 @@ export class GameController {
 
   // --- Lifecycle ---
 
-  startGame(seed: number): void {
-    this.state = createGameState(seed);
+  startGame(seed: number, decks?: [number[], number[]]): void {
+    this.state = createGameState(seed, decks);
     this.state.turnNumber = 1;
     this.state.phase = 'ACTIVATION';
     this.state.activationQueue = buildInitiativeQueue(this.state.units, this.state.rng);
@@ -129,6 +129,14 @@ export class GameController {
     // Add mana (capped)
     for (const player of this.state.players) {
       player.mana = Math.min(player.mana + MANA_PER_TURN, MANA_CAP);
+    }
+
+    // Draw a card for each player (if deck has cards and hand not full)
+    const HAND_LIMIT = 6;
+    for (const p of this.state.players) {
+      if (p.deck.length > 0 && p.hand.length < HAND_LIMIT) {
+        p.hand.push(p.deck.shift()!);
+      }
     }
 
     // Reset alive units (after effects cleared so speed is restored)
