@@ -97,3 +97,18 @@ cd frontend && npm run dev         # Dev server
 - Trait options deterministic: `hash(owner, seasonId, level)` — same options every time for same hero at same level
 - No AI co-author lines in git commits
 - Spell recycling: success → back to deck bottom, failure → graveyard burn (GDD 6.4/6.11)
+- Magic damage (units + spells) bypasses defense — raw attack/spellPower reduced only by MR
+- Physical damage uses atk - def formula, MR ignored
+- Ranged units can melee adjacent enemies with halved damage; also retaliate in melee with halved damage
+- Spell duration = number of target unit activations (not global turns). Duration 1 cast before unit's turn expires at next turn start; cast after, expires turn after next
+- Status effects expire at turn start BEFORE AP reset and queue rebuild
+- AnimationController uses swappable config (`swapConfig`/`restoreConfig`) for polymorph — no special-cased sprite logic
+
+## Battle System Architecture
+- `frontend/src/game/` — pure TS game logic, deterministic, fully unit-tested (339 tests)
+- `frontend/src/game/AnimationController.ts` — per-unit sprite animation state machine with swappable config
+- `frontend/src/game/BattleScene.ts` — engine-side scene manager (sprites, HP bars, highlights, FX, movement, projectiles)
+- `frontend/src/pages/Battle.tsx` — React HUD (Arcana UI components) + input→logic→scene bridge
+- `frontend/src/engine/` — custom WebGPU engine (untouched)
+- Turn flow: advanceTurn() → priority phase (free spawn if 0 units) → initiative phase (unit-by-unit activation)
+- AP model: 1 AP per hex moved, 1 AP for attack, attack ends activation

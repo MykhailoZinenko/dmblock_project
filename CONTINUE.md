@@ -1,11 +1,13 @@
 # Arcana Arena — Session State
 
+**Last updated:** 2026-05-12
+
 ## Current Phase: Battle System (B1–B12 in progress)
 
 ## Battle System Progress
 
-### Game Logic Complete (339 tests, >99% coverage)
-- **types.ts** — CardDefinition, UnitInstance, PlayerState, BoardCell, DamageType, AbilityDefinition
+### Game Logic Complete (339 tests)
+- **types.ts** — CardDefinition, UnitInstance (with ActiveEffect[]), PlayerState, BoardCell, DamageType
 - **cardRegistry.ts** — 20 cards: stats, abilities, damageType, powerMultiplier, spriteKeys, fxKeys
 - **hexUtils.ts** — Pointy-top odd-r: hex2px, px2hex, distance, neighbors, rings, direction
 - **pathfinding.ts** — BFS findReachable + findPath with obstacle blocking
@@ -13,43 +15,27 @@
 - **stateHash.ts** — Canonical JSON + FNV-1a hashing
 - **GameState.ts** — State shape + createGameState
 - **initiative.ts** — Sort by initiative → speed → seeded random
-- **GameController.ts** — Turn lifecycle, events, passActivation, endTurn, isQueueExhausted
+- **GameController.ts** — Turn lifecycle, events, passActivation (skips dead units), endTurn (ticks effects → mana → AP reset → queue), effectExpired event
 - **spawnUnit.ts** — Deploy zone validation, 2×2 buildings, Peasant unarmed 20%
 - **moveUnit.ts** — Reachable hexes, AP cost, board updates
-- **combat.ts** — Damage formula (atk-def, MR, Inferno bypass buildings, crit)
-- **attackUnit.ts** — Melee (adjacent, retaliation) + Ranged (enemy half ×0.5, melee block ×0.5, ammo, Marksman bypass) + **getAutoWalkHex/getAutoWalkTargets** for click-to-attack
-- **castSpell.ts** — Spell targeting, success roll, damage/heal, status effects (slow/polymorph/curse), AoE, tickStatusEffects
+- **combat.ts** — Physical: atk-def. Magic: raw atk, reduced by MR only. Inferno bypasses building MR. Crit 10%/1.5×
+- **attackUnit.ts** — Melee + Ranged (halved on enemy half / melee blocked). Auto-walk (getAutoWalkHex). Ranged can melee with ×0.5. All units retaliate in melee (ranged ×0.5)
+- **castSpell.ts** — 7 spells: Healing, Blast, Storm, Surge, Inferno (AoE), Polymorph, Curse. Success roll, fizzle on fail (mana spent). Status effects: slow/polymorph/curse with activationsLeft tracking. tickUnitEffects on activation end, tickStatusEffects at turn start
 - **spriteConfig.ts** — Animation definitions for all 20 cards + FX + polymorph sheep
 
-### Battle Rendering (New Architecture)
-- **AnimationController.ts** — Per-unit animation state machine: idle/run/attack/death transitions, texture caching, direction picking, fade
-- **BattleScene.ts** — Engine-side manager: grid, unit sprites, HP bars, highlights, smooth movement, damage/heal numbers, projectile, death animation, spell FX, polymorph sheep swap
-- **Battle.tsx** — React HUD (Arcana components) + input bridge, click-to-attack, spell targeting, auto-end activation
+### Battle Rendering Architecture
+- **AnimationController.ts** — Per-unit animation state machine with swappable sprite config (for polymorph). Idle/run/attack(directional)/death/fade. Texture caching per (cardId, state)
+- **BattleScene.ts** — Engine-side manager: hex grid, unit sprites + HP bars, highlights (green move, red attack, orange auto-walk, purple/green/orange spell), smooth movement (300px/s), arrow projectile, damage/heal/status floating text, fizzle text, spell FX, polymorph sprite swap, death anim + fade
+- **Battle.tsx** — React HUD (Arcana components: slate top bar, wood initiative sidebar, ArcanaButton/ArcanaBar) + input bridge. UI modes: pick_card, place_card, target_spell, unit_turn, unit_acted, animating. Click-to-attack with nearby-hex fallback. Auto-end on 0 AP. Priority phase pass button. Debug +5 mana buttons. Activated unit tracking to prevent re-activation after priority spawn
 
-### Battle UI Features
-- 15×11 hex grid with deploy zones
-- Card picker (hand-styled cards with faction/rarity/stats)
-- Arcana HUD: slate top bar (turn/status/mana bars), wood initiative sidebar, styled action buttons
-- Priority turn system (zero-unit players get 1 free spawn)
-- Unit spawning with idle animation + HP bar
-- Smooth continuous movement (run animation, 300px/sec)
-- Click-to-attack: melee auto-walk to nearest adjacent hex (cursor-directed), ranged shoot + projectile
-- Directional attack animations (top/topright/side/bottomright/bottom with fallback chain)
-- Death animation → fade out → removal
-- Floating damage numbers (with crit display)
-- Auto-end activation when AP exhausted (0.4s delay)
-- HP bars with color coding (green > yellow > red)
-- Spell casting: 7 spells (Healing, Blast, Storm, Surge, Inferno, Polymorph, Curse)
-- Spell target selection via hex highlights (purple enemies, green allies, orange AoE)
-- Spell FX animations from spellFxConfigs
-- Success/fail roll with "FIZZLE!" on failure (mana still spent)
-- Status effects: Slow (speed -1), Polymorph (sheep sprite, stats zeroed), Curse (stats halved)
-- Status effects tick down on turn end, auto-expire and restore original stats
-- Floating heal numbers (green +N), status text (purple)
+### Known UI Bugs (Not Yet Fixed)
+- Pathfinding: units sometimes take weird paths or go to wrong cell
+- Sprite click targeting: anchor offset can cause clicks to miss (partially mitigated with nearby-hex check)
+- Various small UI polish issues the user has noticed
 
 ### Not Yet Wired to UI
-- Hero barrier + win condition
-- Activation timer + timeout damage
+- Hero barrier + win condition (B12)
+- Activation timer + timeout damage (B13)
 - Abilities (B15–B25)
 
 ## Completed Phases (Pre-Battle)
@@ -64,23 +50,22 @@
 
 ## Key Decisions This Session
 - Battle.tsx refactored from 640-line monolith into 3 layers: AnimationController + BattleScene + Battle.tsx
-- Attack costs 1 AP, ends activation (move freely + 1 attack, attack ends all movement)
-- Click-to-attack auto-walk: cursor position determines approach direction (nearest adjacent hex to click)
-- Damage formula (atk-def, min 1) kept per GDD — hero attack multiplier will scale effective attack later
-- Arcana UI components (ArcanaPanel, ArcanaButton, ArcanaBar) used for battle HUD
-- Sprite sizing normalized: UNIT_TARGET_HEIGHT = HEX_SIZE * 1.6, buildings 2.0/2.8
+- AP model: 1 AP per hex, 1 AP for attack, attack ends activation (move freely + 1 attack)
+- Click-to-attack auto-walk: cursor position determines approach direction
+- Magic damage bypasses defense — only MR reduces it (both unit attacks and spells)
+- Ranged units can melee with ×0.5 damage, retaliate in melee with ×0.5
+- Spell duration = N unit activations of the affected unit. Expires at turn start
+- Status effects tick at turn start BEFORE AP reset and queue rebuild
+- AnimationController uses swappable config for polymorph — no hardcoded sprite checks
+- Arcana UI components (ArcanaPanel, ArcanaButton, ArcanaBar) for battle HUD
+- Priority phase allows pass (button) and spell casting
+- Dead units skipped in activation queue automatically
 
-## Architecture
-- `frontend/src/game/` — pure TS logic, deterministic, no rendering
-- `frontend/src/game/AnimationController.ts` — per-unit sprite animation state machine
-- `frontend/src/game/BattleScene.ts` — engine-side scene manager
-- `frontend/src/pages/Battle.tsx` — React HUD bridge + input handling
-- `frontend/src/engine/` — WebGPU primitives (untouched)
-- Battle.tsx drives turn flow: advanceTurn() → priority → initiative → endTurn
-
-## Plan Files
+## Spec/Plan Files
 - `docs/superpowers/specs/2026-05-12-battle-polish-design.md`
+- `docs/superpowers/specs/2026-05-12-spell-casting-design.md`
 - `docs/superpowers/plans/2026-05-12-battle-polish.md`
+- `docs/superpowers/plans/2026-05-12-spell-casting.md`
 
 ## Commands
 ```bash
