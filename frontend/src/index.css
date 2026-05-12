@@ -641,6 +641,62 @@ a, button, [role="button"], input, select, textarea, .clickable {
   line-height: 1.35;
 }
 
+.admin-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--color-text-dim);
+  font-size: var(--text-sm);
+}
+
+.admin-totals strong {
+  color: var(--color-parchment);
+  font-family: var(--font-display);
+  margin-right: 4px;
+}
+
+.admin-stats-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(214, 173, 98, 0.18);
+}
+
+.admin-stats-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  background: rgba(10, 10, 18, 0.42);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.admin-stats-table th,
+.admin-stats-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(214, 173, 98, 0.08);
+  white-space: nowrap;
+}
+
+.admin-stats-table th {
+  background: rgba(214, 173, 98, 0.08);
+  color: var(--color-parchment);
+  font-family: var(--font-display);
+  font-size: var(--text-xs, 0.78rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-stats-table tbody tr:hover {
+  background: rgba(214, 173, 98, 0.05);
+}
+
+.admin-stats-table td:first-child {
+  color: var(--color-text-dim);
+  font-family: var(--font-mono, monospace);
+}
+
 @media (max-width: 760px) {
   .admin-id-row {
     grid-template-columns: 1fr;

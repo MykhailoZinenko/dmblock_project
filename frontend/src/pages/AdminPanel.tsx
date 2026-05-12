@@ -287,6 +287,55 @@ export default function AdminPanel() {
     return { minted, trades, lastWei, volWei, twapWei, baseWei, effWei, avgWei };
   }, [cardStatsReads.data]);
 
+  // ---- All-cards stats table ----
+  const cardCountNum = typeof cardCount === "bigint" ? Number(cardCount) : 0;
+  const cardIds = useMemo(() => Array.from({ length: cardCountNum }, (_, i) => BigInt(i)), [cardCountNum]);
+
+  const allStatsReads = useReadContracts({
+    contracts: cardIds.flatMap((id) => [
+      { ...CONTRACTS.gameConfig,  functionName: "getCard" as const,             args: [id] },
+      { ...CONTRACTS.packOpening, functionName: "mintedCount" as const,         args: [id] },
+      { ...CONTRACTS.packOpening, functionName: "uniqueTrades" as const,        args: [id] },
+      { ...CONTRACTS.packOpening, functionName: "lastTradePriceWei" as const,   args: [id] },
+      { ...CONTRACTS.packOpening, functionName: "totalTradeVolumeWei" as const, args: [id] },
+      { ...CONTRACTS.packOpening, functionName: "effectivePriceWei" as const,   args: [id] },
+    ]),
+    query: { enabled: cardCountNum > 0, refetchInterval: 8000 },
+  });
+
+  const allCardsStats = useMemo(() => {
+    const data = allStatsReads.data;
+    if (!data) return [];
+    return cardIds.map((id, idx) => {
+      const base = idx * 6;
+      const cardRow = data[base];
+      const card = isCardChainData(cardRow?.result) ? (cardRow!.result as CardChainData) : null;
+      const num = (i: number) => (data[base + i]?.status === "success" ? data[base + i].result as bigint : 0n);
+      const minted   = num(1);
+      const trades   = num(2);
+      const lastWei  = num(3);
+      const volWei   = num(4);
+      const effWei   = num(5);
+      const avgWei   = trades > 0n ? volWei / trades : 0n;
+      return {
+        id: Number(id),
+        name: card?.name ?? "(unknown)",
+        rarity: card ? RARITIES[card.stats.rarity] ?? "?" : "?",
+        minted, trades, lastWei, volWei, effWei, avgWei,
+      };
+    });
+  }, [allStatsReads.data, cardIds]);
+
+  const totals = useMemo(() => {
+    let minted = 0n, trades = 0n, volume = 0n;
+    for (const r of allCardsStats) {
+      minted += r.minted;
+      trades += r.trades;
+      volume += r.volWei;
+    }
+    return { minted, trades, volume };
+  }, [allCardsStats]);
+
   const previewSrc = useMemo(
     () => svgPreview({ ...cardForm, illustrationUrl: localImageUrl || cardForm.illustrationUrl }),
     [cardForm, localImageUrl],
@@ -304,10 +353,11 @@ export default function AdminPanel() {
       tierReads.refetch();
       refetchLoadedCard();
       cardStatsReads.refetch();
+      allStatsReads.refetch();
       reset();
     }, 900);
     return () => clearTimeout(timer);
-  }, [isSuccess, refetchCardCount, reset, tierReads, refetchLoadedCard, cardStatsReads]);
+  }, [isSuccess, refetchCardCount, reset, tierReads, refetchLoadedCard, cardStatsReads, allStatsReads]);
 
   if (!isConnected) {
     return <div className="page"><p className="msg-info">Connect the owner wallet to open admin tools.</p></div>;
@@ -471,6 +521,61 @@ export default function AdminPanel() {
           You are signed in as <strong>{address}</strong>. GameConfig owner = {isGameOwner ? "yes" : "no"}, PackOpening owner = {isPackOwner ? "yes" : "no"}.
         </p>
       </details>
+
+      <section className="soft-panel">
+        <div className="section-title">
+          <h2>Card Stats Log</h2>
+          <span className="msg-info">refreshes every 8s</span>
+        </div>
+        <p className="msg-info admin-section-help">
+          Live per-card stats. <strong>Dropped</strong> = times this card came out of a pack
+          (counted on-chain in <code>rawFulfillRandomWords</code>). <strong>Trades</strong> = settled
+          marketplace buys (counted on-chain by <code>Marketplace.buy → PackOpening.recordTrade</code>).
+          <strong> Effective</strong> is the price the weight formula currently uses (Base before
+          ≥10 trades, TWAP after).
+        </p>
+        <div className="admin-totals">
+          <span><strong>{totals.minted.toString()}</strong> total drops</span>
+          <span><strong>{totals.trades.toString()}</strong> total trades</span>
+          <span><strong>{formatEther(totals.volume)}</strong> ETH volume</span>
+          <span>{cardCountNum} cards tracked</span>
+        </div>
+        <div className="admin-stats-table-wrap">
+          <table className="admin-stats-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Rarity</th>
+                <th>Dropped</th>
+                <th>Trades</th>
+                <th>Last sale</th>
+                <th>Avg sale</th>
+                <th>Volume</th>
+                <th>Effective</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allCardsStats.length === 0 && (
+                <tr><td colSpan={9} style={{ textAlign: "center", color: "var(--color-text-dim)" }}>Loading…</td></tr>
+              )}
+              {allCardsStats.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.id}</td>
+                  <td>{r.name}</td>
+                  <td>{r.rarity}</td>
+                  <td>{r.minted.toString()}</td>
+                  <td>{r.trades.toString()}</td>
+                  <td>{r.lastWei > 0n ? `${formatEther(r.lastWei)} ETH` : "—"}</td>
+                  <td>{r.avgWei  > 0n ? `${formatEther(r.avgWei)} ETH`  : "—"}</td>
+                  <td>{r.volWei  > 0n ? `${formatEther(r.volWei)} ETH`  : "—"}</td>
+                  <td>{r.effWei  > 0n ? `${formatEther(r.effWei)} ETH`  : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="admin-layout">
         <div className="soft-panel">
