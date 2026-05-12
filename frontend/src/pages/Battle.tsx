@@ -699,21 +699,29 @@ export default function Battle() {
               <span>{statusText}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#6699ff', fontSize: 'var(--text-xs)' }}>P1</span>
                 <div style={{ width: 80 }}>
                   <ArcanaBar value={mana[0]} max={12} color="blue">
                     <span style={{ fontSize: 'var(--text-xs)' }}>{mana[0]}</span>
                   </ArcanaBar>
                 </div>
+                <span
+                  onClick={() => { const s = ctrlRef.current?.getState(); if (s) { s.players[0].mana += 5; syncUI(); } }}
+                  style={{ cursor: 'pointer', color: '#6699ff', fontSize: 'var(--text-xs)', opacity: 0.6 }}
+                >+5</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#ff6666', fontSize: 'var(--text-xs)' }}>P2</span>
                 <div style={{ width: 80 }}>
                   <ArcanaBar value={mana[1]} max={12} color="blue">
                     <span style={{ fontSize: 'var(--text-xs)' }}>{mana[1]}</span>
                   </ArcanaBar>
                 </div>
+                <span
+                  onClick={() => { const s = ctrlRef.current?.getState(); if (s) { s.players[1].mana += 5; syncUI(); } }}
+                  style={{ cursor: 'pointer', color: '#ff6666', fontSize: 'var(--text-xs)', opacity: 0.6 }}
+                >+5</span>
               </div>
             </div>
           </div>
