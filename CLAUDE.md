@@ -28,10 +28,7 @@ Tactical card-battle NFT game on Base Sepolia. Full spec in `GDD.md`.
 │   ├── script/DeployPhase2.s.sol
 │   └── .env                    # Private keys (gitignored)
 ├── frontend/                   # React + Vite app
-├── assets/
-│   ├── cards/                  # Baked card PNG art (full design, no stat numbers)
-│   ├── models/                 # 3D unit models (.glb)
-│   └── card_back.png
+│   └── public/assets/          # Static art at /assets/ (cards, UI, units, fonts)
 ├── GDD.md                      # Game Design Document v2.1 (source of truth)
 ├── ROADMAP.md                  # Development phases
 ├── CONTINUE.md                 # Current session state — READ THIS FIRST
