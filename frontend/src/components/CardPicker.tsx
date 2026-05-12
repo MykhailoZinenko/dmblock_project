@@ -93,7 +93,7 @@ function CardThumb({
     transform: `rotate(${tiltDeg}deg) translateY(${yShift}px)`,
     transition: 'transform var(--duration-normal, 200ms) var(--ease-out, ease-out), box-shadow var(--duration-normal, 200ms)',
     cursor: interactable ? 'pointer' : 'default',
-    opacity: disabled ? 0.35 : affordable ? 1 : 0.45,
+    opacity: disabled ? 0.5 : affordable ? 1 : 0.45,
     filter: affordable || disabled ? 'none' : 'grayscale(0.7)',
     zIndex: selected ? 10 : 1,
   };
