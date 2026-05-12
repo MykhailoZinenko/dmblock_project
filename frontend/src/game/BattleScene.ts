@@ -6,7 +6,7 @@ import { Graphics } from '../engine/nodes/Graphics';
 import { Sprite } from '../engine/nodes/Sprite';
 import { Text } from '../engine/nodes/Text';
 import { AnimationController, type AttackDirection } from './AnimationController';
-import { hex2px } from './hexUtils';
+import { hex2px, isValidCell } from './hexUtils';
 import { getCard, isBuilding } from './cardRegistry';
 import { AnimatedSprite } from '../engine/nodes/AnimatedSprite';
 import { SpriteSheet } from '../engine/textures/SpriteSheet';
@@ -52,6 +52,9 @@ export class BattleScene {
   private unitLayer: Container;
   private uiLayer: Container;
   private hlGfx: Graphics;
+  private hoverGfx: Graphics;
+  private hoverCol = -1;
+  private hoverRow = -1;
   private units: Map<number, UnitEntry> = new Map();
   private heroMarkers: Map<number, HeroMarkerEntry> = new Map();
   private vignetteGfx: Graphics | null = null;
@@ -76,6 +79,10 @@ export class BattleScene {
     this.hlGfx = new Graphics();
     this.hlLayer.addChild(this.hlGfx);
     this.hlGfx.visible = false;
+
+    this.hoverGfx = new Graphics();
+    this.hoverGfx.zIndex = 3;
+    this.hlLayer.addChild(this.hoverGfx);
   }
 
   // ── Grid ─────────────────────────────────────────────
@@ -102,6 +109,27 @@ export class BattleScene {
         grid.endFill();
       }
     }
+  }
+
+  // ── Hover ────────────────────────────────────────────
+
+  updateHover(col: number, row: number): void {
+    if (col === this.hoverCol && row === this.hoverRow) return;
+    this.hoverCol = col;
+    this.hoverRow = row;
+    this.hoverGfx.clear();
+    if (!isValidCell(col, row)) return;
+    const p = hex2px(col, row);
+    this.hoverGfx.lineStyle(2, 0xffffff, 0.6);
+    this.hoverGfx.beginFill(0xffffff, 0.08);
+    this.hoverGfx.drawRegularPolygon(p.x, p.y, HEX_SIZE - 2, 6);
+    this.hoverGfx.endFill();
+  }
+
+  clearHover(): void {
+    this.hoverGfx.clear();
+    this.hoverCol = -1;
+    this.hoverRow = -1;
   }
 
   // ── Units ────────────────────────────────────────────

@@ -163,7 +163,7 @@ export class AnimationController {
     }
 
     const spr = new AnimatedSprite(frames);
-    spr.anchor.set(0.5, 0.75);
+    spr.anchor.set(0.5, 0.5);
     const s = UNIT_TARGET_HEIGHT / anim.frameHeight;
 
     let shouldFlip: boolean;
