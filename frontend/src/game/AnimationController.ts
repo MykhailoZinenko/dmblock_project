@@ -50,6 +50,7 @@ export class AnimationController {
   private isBuildingUnit: boolean;
   private baseScale: number = 1;
   private flipX: boolean;
+  private isPolymorphed: boolean = false;
 
   constructor(engine: Engine, cardId: number, playerId: number) {
     this.engine = engine;
@@ -68,6 +69,10 @@ export class AnimationController {
   }
 
   async playIdle(): Promise<void> {
+    if (this.isPolymorphed) {
+      await this.playSheepAnim('idle');
+      return;
+    }
     if (this.isBuildingUnit) {
       await this.loadBuildingSprite();
       return;
@@ -79,6 +84,10 @@ export class AnimationController {
   }
 
   async playRun(): Promise<void> {
+    if (this.isPolymorphed) {
+      await this.playSheepAnim('bounce');
+      return;
+    }
     if (this.isBuildingUnit) return;
     const cfg = this.unitConfig;
     if (!cfg) return;
@@ -134,13 +143,23 @@ export class AnimationController {
   }
 
   async swapToSheep(): Promise<void> {
-    const anim = getAnimForState(sheepSpriteConfig, 'idle');
+    this.isPolymorphed = true;
+    await this.playSheepAnim('idle');
+  }
+
+  async restoreFromSheep(): Promise<void> {
+    this.isPolymorphed = false;
+    await this.playIdle();
+  }
+
+  private async playSheepAnim(state: 'idle' | 'bounce'): Promise<void> {
+    const anim = getAnimForState(sheepSpriteConfig, state);
     if (!anim) return;
 
-    const cacheKey = 'sheep_idle';
+    const cacheKey = `sheep_${state}`;
     let frames = this.textureCache.get(cacheKey);
     if (!frames) {
-      const tex = await this.engine.textures.load('sheep_idle', `${sheepSpriteConfig.basePath}/${anim.file}`);
+      const tex = await this.engine.textures.load(cacheKey, `${sheepSpriteConfig.basePath}/${anim.file}`);
       frames = SpriteSheet.fromStrip(tex, anim.frameWidth);
       this.textureCache.set(cacheKey, frames);
     }
@@ -159,10 +178,6 @@ export class AnimationController {
     spr.gotoAndPlay(0);
     this.sprite = spr;
     this.container.addChild(spr);
-  }
-
-  async restoreFromSheep(): Promise<void> {
-    await this.playIdle();
   }
 
   destroy(): void {
