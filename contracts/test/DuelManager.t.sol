@@ -394,4 +394,87 @@ contract DuelManagerTest is Test {
         dm.createDuel{value: 1 ether}();
         assertEq(dm.duelCount(), 2);
     }
+
+    // --- Arbiter ---
+
+    function test_SetArbiter() public {
+        vm.prank(admin);
+        dm.setArbiter(address(42));
+        assertEq(dm.arbiter(), address(42));
+    }
+
+    function test_SetArbiter_OnlyOwner() public {
+        vm.prank(player1);
+        vm.expectRevert();
+        dm.setArbiter(address(42));
+    }
+
+    function test_ArbiterSettle_Winner() public {
+        // Setup: create + accept duel
+        vm.prank(player1);
+        uint256 duelId = dm.createDuel{value: 1 ether}();
+        vm.prank(player2);
+        dm.acceptDuel{value: 1 ether}(duelId);
+
+        // Set arbiter
+        vm.prank(admin);
+        dm.setArbiter(address(42));
+
+        // Arbiter settles in favor of player1
+        uint256 p1Before = player1.balance;
+        vm.prank(address(42));
+        dm.arbiterSettle(duelId, player1);
+
+        Duel memory d = dm.getDuel(duelId);
+        assertEq(d.status, 2); // Settled
+        assertEq(d.winner, player1);
+        // Winner gets pot minus 5% fee: 2 ETH * 0.95 = 1.9 ETH
+        assertEq(player1.balance, p1Before + 1.9 ether);
+    }
+
+    function test_ArbiterSettle_Draw() public {
+        vm.prank(player1);
+        uint256 duelId = dm.createDuel{value: 1 ether}();
+        vm.prank(player2);
+        dm.acceptDuel{value: 1 ether}(duelId);
+
+        vm.prank(admin);
+        dm.setArbiter(address(42));
+
+        uint256 p1Before = player1.balance;
+        uint256 p2Before = player2.balance;
+
+        vm.prank(address(42));
+        dm.arbiterSettle(duelId, address(0));
+
+        assertEq(player1.balance, p1Before + 1 ether);
+        assertEq(player2.balance, p2Before + 1 ether);
+    }
+
+    function test_ArbiterSettle_NotArbiter_Reverts() public {
+        vm.prank(player1);
+        uint256 duelId = dm.createDuel{value: 1 ether}();
+        vm.prank(player2);
+        dm.acceptDuel{value: 1 ether}(duelId);
+
+        vm.prank(admin);
+        dm.setArbiter(address(42));
+
+        vm.prank(player1);
+        vm.expectRevert(abi.encodeWithSignature("NotArbiter()"));
+        dm.arbiterSettle(duelId, player1);
+    }
+
+    function test_ArbiterSettle_NotActive_Reverts() public {
+        vm.prank(player1);
+        uint256 duelId = dm.createDuel{value: 1 ether}();
+        // Still Open, not Active
+
+        vm.prank(admin);
+        dm.setArbiter(address(42));
+
+        vm.prank(address(42));
+        vm.expectRevert(abi.encodeWithSignature("DuelNotActive()"));
+        dm.arbiterSettle(duelId, player1);
+    }
 }

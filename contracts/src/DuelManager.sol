@@ -21,6 +21,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         uint256 minimumBet;
         address treasury;
         uint32 seasonId;
+        address arbiter;
     }
 
     // keccak256(abi.encode(uint256(keccak256("arcanaarena.storage.DuelManager")) - 1)) & ~bytes32(uint256(0xff))
@@ -40,6 +41,7 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
     error NotExpiredYet();
     error InvalidSignatures();
     error WinnerNotParticipant();
+    error NotArbiter();
 
     function _getStorage() private pure returns (DuelManagerStorage storage $) {
         assembly {
@@ -176,6 +178,42 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         emit DuelExpired(duelId);
     }
 
+    function arbiterSettle(uint256 duelId, address winner) external nonReentrant {
+        DuelManagerStorage storage s = _getStorage();
+        if (msg.sender != s.arbiter) revert NotArbiter();
+        Duel storage d = s.duels[duelId];
+        if (d.status != 1) revert DuelNotActive();
+        if (winner != address(0) && winner != d.player1 && winner != d.player2) revert WinnerNotParticipant();
+
+        d.status = 2; // Settled
+        d.settledAt = block.timestamp;
+        d.winner = winner;
+
+        uint256 totalPot = d.lockedBet * 2;
+
+        if (winner == address(0)) {
+            (bool ok1,) = d.player1.call{value: d.lockedBet}("");
+            require(ok1, "Refund p1 failed");
+            (bool ok2,) = d.player2.call{value: d.lockedBet}("");
+            require(ok2, "Refund p2 failed");
+        } else {
+            uint256 fee = totalPot * s.protocolFee / 10000;
+            uint256 payout = totalPot - fee;
+
+            (bool ok1,) = winner.call{value: payout}("");
+            require(ok1, "Payout failed");
+            if (fee > 0) {
+                (bool ok2,) = s.treasury.call{value: fee}("");
+                require(ok2, "Fee transfer failed");
+            }
+
+            address loser = winner == d.player1 ? d.player2 : d.player1;
+            _updateElo(winner, loser, s);
+
+            emit DuelSettled(duelId, winner, payout, fee);
+        }
+    }
+
     // --- ELO ---
 
     function _updateElo(address winner, address loser, DuelManagerStorage storage s) internal {
@@ -234,6 +272,10 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
         _getStorage().seasonId = seasonId_;
     }
 
+    function setArbiter(address arbiter_) external onlyOwner {
+        _getStorage().arbiter = arbiter_;
+    }
+
     // --- Views ---
 
     function getDuel(uint256 duelId) external view returns (Duel memory) {
@@ -267,6 +309,10 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
 
     function seasonId() external view returns (uint32) {
         return _getStorage().seasonId;
+    }
+
+    function arbiter() external view returns (address) {
+        return _getStorage().arbiter;
     }
 
     function duelCount() external view returns (uint256) {

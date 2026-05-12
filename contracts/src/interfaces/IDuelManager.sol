@@ -32,4 +32,8 @@ interface IDuelManager {
     function getMatchCount(address player) external view returns (uint256);
     function isCalibrated(address player) external view returns (bool);
     function duelCount() external view returns (uint256);
+
+    function arbiterSettle(uint256 duelId, address winner) external;
+    function arbiter() external view returns (address);
+    function setArbiter(address arbiter_) external;
 }
