@@ -145,6 +145,7 @@ export function executeSpawn(
     garrisonedIn: null,
     polymorphed: false,
     cursed: false,
+    activeEffects: [],
     occupiedCells: cells,
   };
 

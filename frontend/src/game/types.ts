@@ -96,6 +96,7 @@ export interface UnitInstance {
   garrisonedIn: number | null;
   polymorphed: boolean;
   cursed: boolean;
+  activeEffects: ActiveEffect[];
   occupiedCells: readonly HexCoord[];
 }
 
@@ -118,6 +119,13 @@ export interface TerrainEffect {
   ownerId: number;
   damage: number;
   turnsRemaining: number;
+}
+
+export interface ActiveEffect {
+  cardId: number;
+  type: 'slow' | 'polymorph' | 'curse';
+  turnsRemaining: number;
+  originalStats?: { attack: number; defense: number; speed: number };
 }
 
 export type GamePhase =
