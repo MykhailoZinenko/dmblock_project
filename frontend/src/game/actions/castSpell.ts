@@ -175,6 +175,10 @@ export function executeCast(
 
   state.players[playerId].mana -= card.manaCost;
 
+  const hand = state.players[playerId].hand;
+  const hi = hand.indexOf(cardId);
+  if (hi !== -1) hand.splice(hi, 1);
+
   if (!state.rng.rollPercent(card.successChance)) {
     return { success: false, affectedUnits: [] };
   }

@@ -158,6 +158,13 @@ describe('executeSpawn', () => {
     expect(state.players[0].mana).toBe(9);
   });
 
+  it('removes one copy of the spawned card from hand when present', () => {
+    const state = stateWithMana(42, 10, 10);
+    state.players[0].hand = [7, 1, 10];
+    executeSpawn(state, 0, 1, { col: 0, row: 2 });
+    expect(state.players[0].hand).toEqual([7, 10]);
+  });
+
   it('deducts mana from P2', () => {
     const state = stateWithMana(42, 10, 10);
     // Archer costs 4 mana

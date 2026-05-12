@@ -253,6 +253,7 @@ export default function Battle() {
       const first = state.rng.rollPercent(50) ? 0 : 1;
       setPhase({ type: 'priority', player: first });
       setUI({ type: 'pick_card' });
+      uiRef.current = { type: 'pick_card' };
       sceneRef.current?.clearHighlights();
       syncUI();
       return;
@@ -260,6 +261,7 @@ export default function Battle() {
     if (p0Needs) {
       setPhase({ type: 'priority', player: 0 });
       setUI({ type: 'pick_card' });
+      uiRef.current = { type: 'pick_card' };
       sceneRef.current?.clearHighlights();
       syncUI();
       return;
@@ -267,6 +269,7 @@ export default function Battle() {
     if (p1Needs) {
       setPhase({ type: 'priority', player: 1 });
       setUI({ type: 'pick_card' });
+      uiRef.current = { type: 'pick_card' };
       sceneRef.current?.clearHighlights();
       syncUI();
       return;
@@ -298,8 +301,13 @@ export default function Battle() {
     const cu = ctrl.getCurrentUnit();
     if (cu) {
       setUI({ type: 'unit_turn' });
+      uiRef.current = { type: 'unit_turn' };
       resetTimer();
       showActiveUnitHL();
+    } else {
+      setUI({ type: 'pick_card' });
+      uiRef.current = { type: 'pick_card' };
+      sceneRef.current?.clearHighlights();
     }
     syncUI();
   }, [syncUI, showActiveUnitHL, resetTimer]);

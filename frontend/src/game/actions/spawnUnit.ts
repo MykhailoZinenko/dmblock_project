@@ -108,6 +108,11 @@ export function executeSpawn(
   // 1. Deduct mana
   state.players[playerId].mana -= card.manaCost;
 
+  // Remove one copy of the card from hand (if present — tests may spawn without a matching hand card)
+  const hand = state.players[playerId].hand;
+  const hi = hand.indexOf(cardId);
+  if (hi !== -1) hand.splice(hi, 1);
+
   // Compute occupied cells
   const cells = getOccupiedCells(hex, card.size);
 
