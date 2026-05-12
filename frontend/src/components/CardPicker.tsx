@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
-import { cardRegistry } from '../game/cardRegistry';
+import { cardRegistry, getCard } from '../game/cardRegistry';
 import { CardType, Faction, Rarity } from '../game/types';
 import type { CardDefinition } from '../game/types';
 
@@ -49,6 +49,8 @@ interface CardPickerProps {
   selectedCardId: number | null;
   onCancel: () => void;
   disabled: boolean;
+  /** When set (e.g. multiplayer), only cards in this hand are shown, in hand order. */
+  handCardIds?: readonly number[] | undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -286,6 +288,7 @@ export function CardPicker({
   selectedCardId,
   onCancel,
   disabled,
+  handCardIds,
 }: CardPickerProps) {
   // ESC to cancel
   const handleKeyDown = useCallback(
@@ -302,9 +305,17 @@ export function CardPicker({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Split cards into units and spells
-  const units = cardRegistry.filter((c) => c.cardType === CardType.UNIT);
-  const spells = cardRegistry.filter((c) => c.cardType === CardType.SPELL);
+  // Split cards into units and spells (full registry, or current hand only)
+  const handDefs =
+    handCardIds !== undefined
+      ? handCardIds.map((id) => getCard(id))
+      : null;
+  const units = handDefs
+    ? handDefs.filter((c) => c.cardType === CardType.UNIT)
+    : cardRegistry.filter((c) => c.cardType === CardType.UNIT);
+  const spells = handDefs
+    ? handDefs.filter((c) => c.cardType === CardType.SPELL)
+    : cardRegistry.filter((c) => c.cardType === CardType.SPELL);
 
   // Outer container — fixed at bottom, horizontal scroll
   const container: CSSProperties = {

@@ -113,6 +113,9 @@ export default function Battle() {
     const ctrl = ctrlRef.current;
     if (!ctrl) return;
     const s = ctrl.getState();
+    if (isMultiplayer && matchRef.current) {
+      matchRef.current.setUiActivePlayer(getActivePlayer());
+    }
     setMana([s.players[0].mana, s.players[1].mana]);
     setHeroHp([s.players[0].heroHp, s.players[1].heroHp]);
     setTurn(s.turnNumber);
@@ -133,7 +136,7 @@ export default function Battle() {
     const b0 = isBarrierUp(s, 0);
     const b1 = isBarrierUp(s, 1);
     setBarrierState([b0, b1]);
-  }, []);
+  }, [isMultiplayer, getActivePlayer]);
 
   const showActiveUnitHL = useCallback(() => {
     const ctrl = ctrlRef.current;
@@ -303,6 +306,11 @@ export default function Battle() {
 
   const onCardSelect = useCallback((cardId: number) => {
     if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
+    const ctrl0 = ctrlRef.current;
+    if (isMultiplayer && matchRef.current && ctrl0) {
+      const hand = ctrl0.getState().players[matchRef.current.playerIndex].hand;
+      if (!hand.includes(cardId)) return;
+    }
     const card = getCard(cardId);
     if (card.cardType === CardType.SPELL) {
       const ctrl = ctrlRef.current;
@@ -340,7 +348,7 @@ export default function Battle() {
       }
     }
     scene.showDeployHighlights(validHexes);
-  }, [getActivePlayer]);
+  }, [getActivePlayer, isMultiplayer]);
 
   const onCardCancel = useCallback(() => {
     if (uiRef.current.type === 'target_spell') {
@@ -963,6 +971,7 @@ export default function Battle() {
 
       const { opponentDeck } = await match.exchangeDecks(myDeckIds);
       match.startGame(duelId, ctrl);
+      syncUI();
 
       match.on('opponent-action', (action: GameAction) => {
         const scene = sceneRef.current;
@@ -1046,7 +1055,7 @@ export default function Battle() {
       matchRef.current?.destroy();
       conn.disconnect();
     };
-  }, [duelId, address, isMultiplayer]);
+  }, [duelId, address, isMultiplayer, syncUI]);
 
   // ─── Derived display values ─────────────────────────
   const activePlayer = getActivePlayer();
@@ -1054,7 +1063,8 @@ export default function Battle() {
   const isPlacing = ui.type === 'place_card';
   const isTargetingSpell = ui.type === 'target_spell';
   const isAnimating = ui.type === 'animating';
-  const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating;
+  const mpNotMyTurn = isMultiplayer && matchRef.current && !matchRef.current.isMyTurn;
+  const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating || mpNotMyTurn;
   const showPassBtn = (phase.type === 'initiative' && (ui.type === 'unit_turn' || ui.type === 'unit_acted'))
     || (phase.type === 'priority' && ui.type === 'pick_card');
   const currentUnit = ctrlRef.current?.getCurrentUnit();
@@ -1250,7 +1260,16 @@ export default function Battle() {
 
       {/* ─── Card Picker ──────────────────────────── */}
       <CardPicker
-        currentMana={mana[activePlayer]}
+        currentMana={
+          isMultiplayer && matchRef.current && ctrlRef.current
+            ? ctrlRef.current.getState().players[matchRef.current.playerIndex].mana
+            : mana[activePlayer]
+        }
+        handCardIds={
+          isMultiplayer && matchRef.current && ctrlRef.current
+            ? ctrlRef.current.getState().players[matchRef.current.playerIndex].hand
+            : undefined
+        }
         onCardSelect={onCardSelect}
         selectedCardId={isPlacing ? ui.cardId : isTargetingSpell ? ui.cardId : null}
         onCancel={onCardCancel}

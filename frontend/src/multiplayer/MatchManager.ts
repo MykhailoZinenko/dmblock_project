@@ -53,6 +53,12 @@ export class MatchManager {
   /** Opponent's deck-hash received before `exchangeDecks` ran (still had myDeck=[]). */
   private pendingOpponentHash: string | null = null;
 
+  /**
+   * When there is no activation unit, `GameController.getControllingPlayer()` is -1.
+   * Battle sets this from React phase (priority seat or initiative) so `isMyTurn` stays correct.
+   */
+  private uiActivePlayer: number | null = null;
+
   private timerHandle: ReturnType<typeof setTimeout> | null = null;
   private activationStartTime = 0;
   private timeoutCount = 0;
@@ -74,9 +80,22 @@ export class MatchManager {
     return this._phase;
   }
 
+  /** WebRTC seat — same index as `GameState.players[this]` for this client. */
+  get playerIndex(): 0 | 1 {
+    return this.conn.playerIndex;
+  }
+
+  /** Sync from `Battle` whenever UI phase / active seat changes. */
+  setUiActivePlayer(playerId: number): void {
+    this.uiActivePlayer = playerId;
+  }
+
   get isMyTurn(): boolean {
     if (!this.ctrl) return false;
-    return this.ctrl.getControllingPlayer() === this.conn.playerIndex;
+    const cp = this.ctrl.getControllingPlayer();
+    const seat = cp >= 0 ? cp : this.uiActivePlayer;
+    if (seat === null || seat < 0) return false;
+    return seat === this.conn.playerIndex;
   }
 
   // ---------- event emitter ----------

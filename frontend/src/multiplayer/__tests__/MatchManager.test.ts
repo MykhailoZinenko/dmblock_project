@@ -130,9 +130,12 @@ describe('MatchManager', () => {
       expect(match.phase).toBe('playing');
     });
 
-    it('isMyTurn reflects controlling player', async () => {
-      const ctrl = await setupPlaying();
-      // With no units, controlling player is -1, not 0
+    it('isMyTurn uses ui seat when there is no activation unit', async () => {
+      await setupPlaying();
+      expect(match.isMyTurn).toBe(false);
+      match.setUiActivePlayer(0);
+      expect(match.isMyTurn).toBe(true);
+      match.setUiActivePlayer(1);
       expect(match.isMyTurn).toBe(false);
     });
   });
