@@ -10,7 +10,7 @@ import {
 } from '../game/constants';
 import {
   isBarrierUp, canAttackHero, executeHeroAttack,
-  checkWinCondition, applyTimeoutDamage, HERO_HEX, HERO_ADJACENT,
+  checkWinCondition, applyTimeoutDamage, HERO_HEX,
 } from '../game/actions/heroActions';
 import { GameController } from '../game/GameController';
 import { canSpawn, executeSpawn } from '../game/actions/spawnUnit';
@@ -136,15 +136,9 @@ export default function Battle() {
       });
     }
 
-    const enemyPid = cu.playerId === 0 ? 1 : 0;
-    if (canAttackHero(ctrl.getState(), cu.uid, enemyPid).valid) {
-      for (const adj of HERO_ADJACENT[enemyPid]) {
-        attackable.push({ unitUid: -1, cells: [adj], autoWalk: false });
-      }
-    }
-
     scene.showMoveHighlights({ col: cu.col, row: cu.row }, reachable, attackable);
 
+    const enemyPid = cu.playerId === 0 ? 1 : 0;
     if (canAttackHero(ctrl.getState(), cu.uid, enemyPid).valid) {
       scene.showHeroAttackHighlight(enemyPid);
     }
@@ -628,29 +622,6 @@ export default function Battle() {
         return;
       }
 
-      // ── Hero attack (click on hero's adjacent hex) ──
-      const enemyPid = cu.playerId === 0 ? 1 : 0;
-      const clickedHeroAdj = HERO_ADJACENT[enemyPid].some(h => h.col === col && h.row === row);
-      if (clickedHeroAdj && canAttackHero(state, cu.uid, enemyPid).valid) {
-        {
-          setUI({ type: 'animating' });
-          uiRef.current = { type: 'animating' };
-          scene.clearHighlights();
-
-          const heroResult = executeHeroAttack(state, cu.uid, enemyPid);
-          scene.showHeroDamage(enemyPid, heroResult.damage, heroResult.isCrit);
-          syncUI();
-          resetTimer();
-
-          if (handleWinCheck()) return;
-
-          scheduleAutoEnd();
-          setUI({ type: 'unit_acted' });
-          uiRef.current = { type: 'unit_acted' };
-          return;
-        }
-      }
-
       // ── Move (not clicking enemy) ──
       if (currentUI.type === 'unit_acted') return;
       if (!canMove(state, cu.uid, { col, row }).valid) return;
@@ -677,7 +648,7 @@ export default function Battle() {
     return () => window.removeEventListener('hex-click', handler);
   }, [getActivePlayer, advanceTurn, showActiveUnitHL, syncUI, scheduleAutoEnd]);
 
-  // ─── Offgrid click (hero targeting) ─────────────────
+  // ─── Offgrid click (hero marker — unit attack or spell) ──
   useEffect(() => {
     const handler = (e: Event) => {
       const { worldX, worldY } = (e as CustomEvent).detail;
@@ -685,18 +656,75 @@ export default function Battle() {
       const scene = sceneRef.current;
       if (!ctrl || !scene || gameOverRef.current) return;
       const currentUI = uiRef.current;
-      if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
+      const currentPhase = phaseRef.current;
+      const state = ctrl.getState();
 
+      // Which hero marker was clicked?
+      let clickedPid = -1;
+      for (const pid of [0, 1]) {
+        const pos = scene.getHeroWorldPos(pid);
+        const dist = Math.sqrt((worldX - pos.x) ** 2 + (worldY - pos.y) ** 2);
+        if (dist < HEX_SIZE * 1.0) { clickedPid = pid; break; }
+      }
+      if (clickedPid < 0) return;
+
+      // ── Spell targeting hero ──
+      if (currentUI.type === 'target_spell') {
+        const player = getActivePlayer();
+        const spellCardId = currentUI.cardId;
+        const heroHex = HERO_HEX[clickedPid];
+        if (!canCast(state, player, spellCardId, heroHex).valid) return;
+
+        setUI({ type: 'animating' });
+        uiRef.current = { type: 'animating' };
+        scene.clearHighlights();
+
+        const result = executeCast(state, player, spellCardId, heroHex);
+
+        const finishSpellOnHero = () => {
+          checkBarrierChange();
+          syncUI();
+          resetTimer();
+          if (handleWinCheck()) return;
+          if (currentPhase.type === 'priority') {
+            const prev = prioRef.current;
+            const newPrio: PriorityState = {
+              ...prev,
+              p0Used: player === 0 ? true : prev.p0Used,
+              p1Used: player === 1 ? true : prev.p1Used,
+            };
+            setPriority(newPrio);
+            prioRef.current = newPrio;
+          } else {
+            const cu = ctrl.getCurrentUnit();
+            if (cu) trackActivated(cu.uid);
+            ctrl.passActivation();
+          }
+          setTimeout(() => advanceTurn(), 400);
+        };
+
+        if (!result.success) {
+          scene.showFizzle(heroHex);
+          finishSpellOnHero();
+          return;
+        }
+
+        scene.playSpellFx(spellCardId, heroHex, () => {
+          if (result.heroDamage) {
+            scene.showHeroDamage(result.heroDamage.playerId, result.heroDamage.damage, false);
+          }
+          finishSpellOnHero();
+        });
+        return;
+      }
+
+      // ── Unit attack on hero marker ──
+      if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
       const cu = ctrl.getCurrentUnit();
       if (!cu) return;
-      const state = ctrl.getState();
       const enemyPid = cu.playerId === 0 ? 1 : 0;
-
+      if (clickedPid !== enemyPid) return;
       if (!canAttackHero(state, cu.uid, enemyPid).valid) return;
-
-      const heroPos = scene.getHeroWorldPos(enemyPid);
-      const clickDist = Math.sqrt((worldX - heroPos.x) ** 2 + (worldY - heroPos.y) ** 2);
-      if (clickDist > HEX_SIZE * 1.2) return;
 
       setUI({ type: 'animating' });
       uiRef.current = { type: 'animating' };
@@ -716,7 +744,7 @@ export default function Battle() {
 
     window.addEventListener('offgrid-click', handler);
     return () => window.removeEventListener('offgrid-click', handler);
-  }, [syncUI, resetTimer, handleWinCheck, scheduleAutoEnd]);
+  }, [getActivePlayer, syncUI, resetTimer, handleWinCheck, scheduleAutoEnd, advanceTurn, trackActivated, checkBarrierChange]);
 
   // ─── Activation timer ──────────────────────────────
   useEffect(() => {
