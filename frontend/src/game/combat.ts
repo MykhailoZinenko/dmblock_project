@@ -23,22 +23,23 @@ export function calculateDamage(
   target: UnitInstance,
   rng: SeededRNG,
 ): DamageResult {
-  let damage = Math.max(1, attacker.attack - target.defense);
+  let damage: number;
 
-  // Magic resistance reduction
   if (attacker.damageType === DamageType.MAGIC) {
+    // Magic damage bypasses defense — raw attack, reduced only by MR
+    damage = attacker.attack;
     const targetCard = getCard(target.cardId);
     const attackerCard = getCard(attacker.cardId);
     const targetIsBuilding = isBuilding(targetCard);
 
-    if (targetIsBuilding) {
-      // Inferno faction magic bypasses building MR (physical conversion)
-      if (attackerCard.faction !== Faction.INFERNO) {
-        damage = damage * (1 - target.magicResistance / 100);
-      }
-    } else {
-      damage = damage * (1 - target.magicResistance / 100);
+    if (targetIsBuilding && attackerCard.faction === Faction.INFERNO) {
+      // Inferno bypasses building MR (physical conversion)
+    } else if (target.magicResistance > 0) {
+      damage = Math.floor(damage * (1 - target.magicResistance / 100));
     }
+  } else {
+    // Physical damage: attack minus defense
+    damage = Math.max(1, attacker.attack - target.defense);
   }
 
   // Critical hit roll

@@ -105,13 +105,13 @@ describe('calculateDamage', () => {
     expect(result.damage).toBe(10);
   });
 
-  it('magic damage vs 0% MR deals full damage', () => {
+  it('magic damage vs 0% MR deals full attack (bypasses defense)', () => {
     // Torchbearer (id 7) deals magic damage, Inferno faction
     const attacker = makeUnit({ uid: 1, cardId: 7, playerId: 0, attack: 10 });
     const target = makeUnit({ uid: 2, cardId: 0, playerId: 1, defense: 3, magicResistance: 0 });
     const rng = new SeededRNG(999);
     const result = calculateDamage(attacker, target, rng);
-    expect(result.damage).toBe(7);
+    expect(result.damage).toBe(10);
   });
 
   it('magic damage vs 50% MR deals half damage', () => {
@@ -150,15 +150,15 @@ describe('calculateDamage', () => {
     expect(result.damage).toBe(1);
   });
 
-  it('Inferno magic damage vs building bypasses MR (full damage)', () => {
+  it('Inferno magic damage vs building bypasses MR (full attack)', () => {
     // Torchbearer (id 7) is Inferno + magic damage
     const attacker = makeUnit({ uid: 1, cardId: 7, playerId: 0, attack: 20 });
     // Tower (id 17) is a building with 100% MR
     const target = makeUnit({ uid: 2, cardId: 17, playerId: 1, defense: 3, magicResistance: 100 });
     const rng = new SeededRNG(999);
     const result = calculateDamage(attacker, target, rng);
-    // Inferno vs building: MR bypassed, damage = max(1, 20 - 3) = 17
-    expect(result.damage).toBe(17);
+    // Inferno vs building: MR bypassed, raw attack = 20
+    expect(result.damage).toBe(20);
   });
 
   it('physical damage ignores MR entirely', () => {
