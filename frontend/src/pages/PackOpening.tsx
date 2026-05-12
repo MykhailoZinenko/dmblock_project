@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { formatEther, parseEther } from "viem";
 import {
   useAccount,
-  useChainId,
   useReadContract,
   useReadContracts,
   useWaitForTransactionReceipt,
@@ -14,7 +13,17 @@ import { CardImage, type CardStats } from "../ui/components/CardImage";
 import { ArcanaButton, ArcanaPanel, ArcanaRibbon } from "../ui/components/index";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
-const LOCAL_CHAIN_ID = 31337;
+
+/** Present only on MockVrfCoordinator (forge deploy without Chainlink). */
+const MOCK_COORDINATOR_PROBE_ABI = [
+  {
+    type: "function",
+    name: "nextRequestId",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;
 
 const MOCK_VRF_ABI = [
   {
@@ -68,14 +77,12 @@ const FACTION_NAMES = ["Castle", "Inferno", "Necropolis", "Dungeon"] as const;
 
 export default function PackOpening() {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
   const [selectedTierId, setSelectedTierId] = useState(0);
   const [lastRequestId, setLastRequestId] = useState<bigint | null>(null);
   const [pull, setPull] = useState<Pull | null>(null);
   const [fulfillFiredFor, setFulfillFiredFor] = useState<bigint | null>(null);
 
   const configured = ADDRESSES.packOpening.toLowerCase() !== ZERO;
-  const isLocalDev = chainId === LOCAL_CHAIN_ID;
 
   const { writeContract, data: txHash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
@@ -85,7 +92,19 @@ export default function PackOpening() {
   const { data: vrfCoordinator } = useReadContract({
     ...CONTRACTS.packOpening,
     functionName: "vrfCoordinator",
-    query: { enabled: configured && isLocalDev },
+    query: { enabled: configured },
+  });
+
+  const vrfCoordAddr =
+    vrfCoordinator && typeof vrfCoordinator === "string" && vrfCoordinator !== ZERO
+      ? (vrfCoordinator as `0x${string}`)
+      : undefined;
+
+  const { isSuccess: coordinatorIsMock } = useReadContract({
+    address: vrfCoordAddr,
+    abi: MOCK_COORDINATOR_PROBE_ABI,
+    functionName: "nextRequestId",
+    query: { enabled: configured && !!vrfCoordAddr },
   });
 
   // Read tier configs from chain — admin updates surface here automatically.
@@ -163,18 +182,18 @@ export default function PackOpening() {
     tierReads.refetch();
   }, [isSuccess, tierReads]);
 
-  // Dev-only: auto-fulfill the mock VRF coordinator so the local flow doesn't hang.
+  // Auto-fulfill mock VRF (anvil or testnet deploys without Chainlink).
   useEffect(() => {
-    if (!isLocalDev || !lastRequestId || pull || !vrfCoordinator) return;
+    if (!coordinatorIsMock || !lastRequestId || pull || !vrfCoordAddr) return;
     if (fulfillFiredFor === lastRequestId) return;
     setFulfillFiredFor(lastRequestId);
     fulfillVrf({
-      address: vrfCoordinator as `0x${string}`,
+      address: vrfCoordAddr,
       abi: MOCK_VRF_ABI,
       functionName: "fulfill",
       args: [ADDRESSES.packOpening as `0x${string}`, lastRequestId, BigInt(Date.now())],
     });
-  }, [isLocalDev, lastRequestId, pull, vrfCoordinator, fulfillFiredFor, fulfillVrf]);
+  }, [coordinatorIsMock, lastRequestId, pull, vrfCoordAddr, fulfillFiredFor, fulfillVrf]);
 
   const uniquePullCardIds = useMemo(() => {
     if (!pull) return [] as number[];
@@ -263,7 +282,7 @@ export default function PackOpening() {
       {isSuccess && waitingForVrf && (
         <p className="msg-info">
           VRF request #{lastRequestId.toString()} is pending
-          {isLocalDev ? " — auto-fulfilling on local chain..." : ". The reveal appears after fulfillment."}
+          {coordinatorIsMock ? " — completing mock randomness..." : ". The reveal appears after fulfillment."}
         </p>
       )}
       {error && <p className="msg-error">{error.message.slice(0, 160)}</p>}

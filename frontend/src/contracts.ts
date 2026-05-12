@@ -6,14 +6,15 @@ import { PackOpeningAbi } from "./abi/PackOpening";
 import { DuelManagerAbi } from "./abi/DuelManager";
 import { FreedomRecordAbi } from "./abi/FreedomRecord";
 
+/** Ethereum Sepolia (11155111) — Arcana Arena deploy */
 export const ADDRESSES = {
-  gameConfig: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-  cardNFT: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-  heroNFT: "0x4A679253410272dd5232B3Ff7cF5dbB88f295319",
-  packOpening: "0x36c02dA8a0983159322a80FFE9F24b1AcfF8B570",
-  marketplace: "0x8f86403A4DE0bb5791fa46B8e795C547942fE4Cf",
-  duelManager: "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
-  freedomRecord: "0x36b58F5C1969B7b6591D752ea6F5486D069010AB",
+  gameConfig: "0x42921B7DDEcF9a6e8731e89B8D417E70f5D340F6",
+  cardNFT: "0xa4616f3f5b1fa4B8B895727c878C6Cf524e25afD",
+  heroNFT: "0x2FB7FA959EbaB2B6786B244a09e99CF72B37f297",
+  packOpening: "0xB85BDb1C55623923a59BD0BE19FC56f1C51056c6",
+  marketplace: "0x3089d16F1E787FA1fAa1B88310618E713E889087",
+  duelManager: "0x3e7DC4775031bD3CF9d2e97d99BD5F48Be54094B",
+  freedomRecord: "0x3c18457a5d0e416e0a058D98Dc73250d1B76368A",
 } as const;
 
 export const CONTRACTS = {
