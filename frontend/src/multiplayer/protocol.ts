@@ -8,7 +8,14 @@ export type GameAction =
       /** Mirrors Battle phase: free deploy round vs initiative spawn. */
       priorityPhase?: boolean;
     }
-  | { type: 'move'; unitUid: number; col: number; row: number }
+  | {
+      type: 'move';
+      unitUid: number;
+      col: number;
+      row: number;
+      /** Full hex path start→end (length ≥ 2) for peer animation; state still applies from col/row. */
+      path?: { col: number; row: number }[];
+    }
   | { type: 'attack'; attackerUid: number; targetUid: number }
   | { type: 'attack-hero'; attackerUid: number; targetPlayerId: number }
   | { type: 'cast'; playerId: number; cardId: number; col: number; row: number }

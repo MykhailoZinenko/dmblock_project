@@ -193,19 +193,24 @@ export default function Battle() {
     const cu = ctrl.getCurrentUnit();
     if (!cu || cu.remainingAp > 0) return;
 
+    const releasedUid = cu.uid;
     let elapsed = 0;
     const tick = (dt: number) => {
       elapsed += dt;
       if (elapsed >= AUTO_END_DELAY) {
         engine.ticker.remove(tick);
-        trackActivated(cu.uid);
+        trackActivated(releasedUid);
         ctrl.passActivation();
         sceneRef.current?.clearHighlights();
+        resetTimer();
         advanceTurn();
+        if (isMultiplayer && connRef.current) {
+          sendAction({ type: 'pass', releasedUnitUid: releasedUid });
+        }
       }
     };
     engine.ticker.add(tick);
-  }, []);
+  }, [isMultiplayer, trackActivated, advanceTurn, resetTimer, sendAction]);
 
   const resetTimer = useCallback(() => {
     timerRef.current = ACTIVATION_TIMER_SECONDS;
@@ -429,6 +434,15 @@ export default function Battle() {
       const currentPhase = phaseRef.current;
 
       if (currentUI.type === 'animating') return;
+
+      if (
+        isMultiplayer &&
+        matchRef.current &&
+        (currentUI.type === 'unit_turn' || currentUI.type === 'unit_acted')
+      ) {
+        const cu0 = ctrl.getCurrentUnit();
+        if (cu0 && cu0.playerId !== matchRef.current.playerIndex) return;
+      }
 
       // ── Cast spell ──
       if (currentUI.type === 'target_spell') {
@@ -678,7 +692,13 @@ export default function Battle() {
             scene.clearHighlights();
 
             const path = executeMove(state, cu.uid, walkHex);
-            sendAction({ type: 'move', unitUid: cu.uid, col: walkHex.col, row: walkHex.row });
+            sendAction({
+              type: 'move',
+              unitUid: cu.uid,
+              col: walkHex.col,
+              row: walkHex.row,
+              path: path.map((h) => ({ col: h.col, row: h.row })),
+            });
             scene.moveUnit(cu.uid, path, () => {
               const attackResult = executeAttack(state, cu.uid, targetUnit.uid);
               sendAction({ type: 'attack', attackerUid: cu.uid, targetUid: targetUnit.uid });
@@ -703,7 +723,13 @@ export default function Battle() {
       scene.clearHighlights();
 
       const path = executeMove(state, cu.uid, { col, row });
-      sendAction({ type: 'move', unitUid: cu.uid, col, row });
+      sendAction({
+        type: 'move',
+        unitUid: cu.uid,
+        col,
+        row,
+        path: path.map((h) => ({ col: h.col, row: h.row })),
+      });
       scene.moveUnit(cu.uid, path, () => {
         setUI({ type: 'unit_turn' });
         uiRef.current = { type: 'unit_turn' };
@@ -719,7 +745,7 @@ export default function Battle() {
 
     window.addEventListener('hex-click', handler);
     return () => window.removeEventListener('hex-click', handler);
-  }, [getActivePlayer, advanceTurn, showActiveUnitHL, syncUI, scheduleAutoEnd]);
+  }, [getActivePlayer, advanceTurn, showActiveUnitHL, syncUI, scheduleAutoEnd, sendAction]);
 
   // ─── Offgrid click (hero marker — unit attack or spell) ──
   useEffect(() => {
@@ -797,6 +823,7 @@ export default function Battle() {
       if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
       const cu = ctrl.getCurrentUnit();
       if (!cu) return;
+      if (isMultiplayer && matchRef.current && cu.playerId !== matchRef.current.playerIndex) return;
       const enemyPid = cu.playerId === 0 ? 1 : 0;
       if (clickedPid !== enemyPid) return;
       if (!canAttackHero(state, cu.uid, enemyPid).valid) return;
@@ -850,15 +877,20 @@ export default function Battle() {
 
         if (handleWinCheck()) return;
 
+        const releasedUid = cu.uid;
+        trackActivated(releasedUid);
         ctrl.passActivation();
         scene.clearHighlights();
         resetTimer();
         advanceTurn();
+        if (isMultiplayer && connRef.current) {
+          sendAction({ type: 'pass', releasedUnitUid: releasedUid });
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [syncUI, handleWinCheck, advanceTurn, resetTimer]);
+  }, [syncUI, handleWinCheck, advanceTurn, resetTimer, isMultiplayer, sendAction, trackActivated]);
 
   // ─── Engine init ────────────────────────────────────
   useEffect(() => {
@@ -1063,7 +1095,13 @@ export default function Battle() {
             break;
           }
           case 'move': {
-            scene.moveUnit(action.unitUid, [{ col: action.col, row: action.row }], () => {});
+            const path =
+              action.path && action.path.length >= 2
+                ? action.path.map((p) => ({ col: p.col, row: p.row }))
+                : [];
+            if (path.length >= 2) {
+              scene.moveUnit(action.unitUid, path, () => {});
+            }
             break;
           }
           case 'attack': {

@@ -326,7 +326,16 @@ describe('MatchManager', () => {
       ctrl.rebuildQueue();
       conn.simulateMessage({
         type: 'action',
-        action: { type: 'move', unitUid: unit.uid, col: 1, row: 0 },
+        action: {
+          type: 'move',
+          unitUid: unit.uid,
+          col: 1,
+          row: 0,
+          path: [
+            { col: 0, row: 0 },
+            { col: 1, row: 0 },
+          ],
+        },
       });
     });
 
