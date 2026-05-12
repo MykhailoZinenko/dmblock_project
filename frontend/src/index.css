@@ -416,6 +416,27 @@ a, button, [role="button"], input, select, textarea, .clickable {
   text-align: center;
 }
 
+/* --- Duel Lobby --- */
+.duel-card { overflow: hidden; }
+.duel-card-body {
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+.duel-stats-row {
+  display: flex;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+.duel-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 100px;
+}
+.duel-stat-label { color: var(--color-text-dim); font-size: var(--text-sm); }
+.duel-stat-value { color: var(--color-parchment); font-size: var(--text-xl); font-weight: 600; font-family: var(--font-display); }
+
 .card-media {
   width: 100%;
   min-height: 210px;
