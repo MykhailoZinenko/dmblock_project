@@ -4,6 +4,11 @@ pragma solidity ^0.8.28;
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ICardNFT} from "./interfaces/ICardNFT.sol";
+
+interface IPackOpeningRecord {
+    function recordTrade(uint256 cardId, uint96 priceWei) external;
+}
 
 contract Marketplace is ReentrancyGuard {
     struct Listing {
@@ -12,6 +17,8 @@ contract Marketplace is ReentrancyGuard {
     }
 
     IERC721 public immutable cardNFT;
+    /// @notice Optional PackOpening hook for trade stats. address(0) disables recording.
+    address public immutable packOpening;
 
     mapping(uint256 tokenId => Listing) private _listings;
 
@@ -34,8 +41,9 @@ contract Marketplace is ReentrancyGuard {
         uint256 royaltyAmount
     );
 
-    constructor(address cardNFTAddress) {
+    constructor(address cardNFTAddress, address packOpeningAddress) {
         cardNFT = IERC721(cardNFTAddress);
+        packOpening = packOpeningAddress;
     }
 
     /// @notice List a card for sale. The NFT is escrowed by this contract until cancelled or bought.
@@ -97,6 +105,14 @@ contract Marketplace is ReentrancyGuard {
         }
 
         emit Sold(tokenId, listing.seller, msg.sender, listing.priceWei, royaltyReceiver, royaltyAmount);
+
+        // Best-effort trade-stats hook. Wrapped in try/catch so a broken or
+        // un-authorized PackOpening can never block a settled trade.
+        if (packOpening != address(0)) {
+            try ICardNFT(address(cardNFT)).tokenCardId(tokenId) returns (uint256 cardId) {
+                try IPackOpeningRecord(packOpening).recordTrade(cardId, listing.priceWei) {} catch {}
+            } catch {}
+        }
     }
 
     function getListing(uint256 tokenId) external view returns (Listing memory) {

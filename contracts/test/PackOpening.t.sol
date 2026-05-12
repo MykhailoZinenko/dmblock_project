@@ -188,4 +188,104 @@ contract PackOpeningTest is Test {
 
         assertEq(packs.effectivePriceWei(1), 0.005 ether);
     }
+
+    // ---------- mintedCount ----------
+
+    function test_Fulfill_IncrementsMintedCount() public {
+        vm.prank(player);
+        uint256 requestId = packs.buyPack{value: 0.002 ether}(PackOpening.PackTier.Common);
+        vrf.fulfill(address(packs), requestId, 99);
+
+        uint256 total;
+        for (uint256 i = 0; i < 4; i++) total += packs.mintedCount(i);
+        assertEq(total, 4); // Common tier mints 4 cards
+    }
+
+    // ---------- recordTrade auth ----------
+
+    function test_RecordTrade_RevertsForNonMarketplace() public {
+        vm.expectRevert(PackOpening.NotMarketplace.selector);
+        packs.recordTrade(0, 0.01 ether);
+    }
+
+    function test_RecordTrade_RevertsForRandomCaller_EvenIfMarketplaceSet() public {
+        address fakeMarket = address(0xCAFE);
+        vm.prank(admin);
+        packs.setMarketplace(fakeMarket);
+
+        vm.prank(address(0xDEAD));
+        vm.expectRevert(PackOpening.NotMarketplace.selector);
+        packs.recordTrade(0, 0.01 ether);
+    }
+
+    function test_SetMarketplace_OnlyOwner() public {
+        vm.prank(player);
+        vm.expectRevert();
+        packs.setMarketplace(address(0xCAFE));
+    }
+
+    // ---------- recordTrade stats ----------
+
+    function test_RecordTrade_UpdatesStats_FirstTrade() public {
+        address fakeMarket = address(0xCAFE);
+        vm.prank(admin);
+        packs.setMarketplace(fakeMarket);
+
+        vm.prank(fakeMarket);
+        packs.recordTrade(0, 0.01 ether);
+
+        assertEq(packs.uniqueTrades(0), 1);
+        assertEq(packs.lastTradePriceWei(0), 0.01 ether);
+        assertEq(packs.twapPriceWei(0), 0.01 ether); // seeds TWAP on first trade
+        assertEq(packs.totalTradeVolumeWei(0), 0.01 ether);
+    }
+
+    function test_RecordTrade_RunningMeanAcrossTrades() public {
+        address fakeMarket = address(0xCAFE);
+        vm.prank(admin);
+        packs.setMarketplace(fakeMarket);
+
+        // Three trades at 0.01, 0.02, 0.03 — mean = 0.02 ETH.
+        vm.startPrank(fakeMarket);
+        packs.recordTrade(0, 0.01 ether);
+        packs.recordTrade(0, 0.02 ether);
+        packs.recordTrade(0, 0.03 ether);
+        vm.stopPrank();
+
+        assertEq(packs.uniqueTrades(0), 3);
+        assertEq(packs.twapPriceWei(0), 0.02 ether);
+        assertEq(packs.totalTradeVolumeWei(0), 0.06 ether);
+        assertEq(packs.lastTradePriceWei(0), 0.03 ether);
+    }
+
+    function test_RecordTrade_NoOpForUnknownCardOrZeroPrice() public {
+        address fakeMarket = address(0xCAFE);
+        vm.prank(admin);
+        packs.setMarketplace(fakeMarket);
+
+        vm.startPrank(fakeMarket);
+        packs.recordTrade(999, 0.01 ether); // cardId out of range
+        packs.recordTrade(0, 0);            // zero price
+        vm.stopPrank();
+
+        assertEq(packs.uniqueTrades(0), 0);
+        assertEq(packs.uniqueTrades(999), 0);
+        assertEq(packs.lastTradePriceWei(0), 0);
+    }
+
+    function test_RecordTrade_EffectivePriceFlipsAtTenTrades() public {
+        address fakeMarket = address(0xCAFE);
+        vm.prank(admin);
+        packs.setMarketplace(fakeMarket);
+
+        // Base seeded at 0.005 in setUp. Stream 10 trades at 0.002 each.
+        vm.startPrank(fakeMarket);
+        for (uint256 i = 0; i < 10; i++) packs.recordTrade(1, 0.002 ether);
+        vm.stopPrank();
+
+        // After 10 trades the contract switches to TWAP, which is now 0.002.
+        assertEq(packs.uniqueTrades(1), 10);
+        assertEq(packs.twapPriceWei(1), 0.002 ether);
+        assertEq(packs.effectivePriceWei(1), 0.002 ether);
+    }
 }

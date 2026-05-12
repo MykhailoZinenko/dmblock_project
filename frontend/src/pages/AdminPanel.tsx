@@ -255,6 +255,38 @@ export default function AdminPanel() {
     query: { enabled: cardIdBig !== null && cardIdBig >= 0n },
   });
 
+  // Per-card live stats (drops + trades + price history). Auto-refreshes so a fresh
+  // pack open or a settled trade shows up without reloading the page.
+  const cardStatsReads = useReadContracts({
+    contracts: cardIdBig !== null && cardIdBig >= 0n
+      ? [
+          { ...CONTRACTS.packOpening, functionName: "mintedCount" as const,         args: [cardIdBig] },
+          { ...CONTRACTS.packOpening, functionName: "uniqueTrades" as const,        args: [cardIdBig] },
+          { ...CONTRACTS.packOpening, functionName: "lastTradePriceWei" as const,   args: [cardIdBig] },
+          { ...CONTRACTS.packOpening, functionName: "totalTradeVolumeWei" as const, args: [cardIdBig] },
+          { ...CONTRACTS.packOpening, functionName: "twapPriceWei" as const,        args: [cardIdBig] },
+          { ...CONTRACTS.packOpening, functionName: "adminBasePriceWei" as const,   args: [cardIdBig] },
+          { ...CONTRACTS.packOpening, functionName: "effectivePriceWei" as const,   args: [cardIdBig] },
+        ]
+      : [],
+    query: { enabled: cardIdBig !== null && cardIdBig >= 0n, refetchInterval: 6000 },
+  });
+
+  const cardStats = useMemo(() => {
+    const rows = cardStatsReads.data;
+    if (!rows || rows.length < 7) return null;
+    const num = (i: number) => (rows[i]?.status === "success" ? rows[i].result as bigint : 0n);
+    const minted   = num(0);
+    const trades   = num(1);
+    const lastWei  = num(2);
+    const volWei   = num(3);
+    const twapWei  = num(4);
+    const baseWei  = num(5);
+    const effWei   = num(6);
+    const avgWei   = trades > 0n ? volWei / trades : 0n;
+    return { minted, trades, lastWei, volWei, twapWei, baseWei, effWei, avgWei };
+  }, [cardStatsReads.data]);
+
   const previewSrc = useMemo(
     () => svgPreview({ ...cardForm, illustrationUrl: localImageUrl || cardForm.illustrationUrl }),
     [cardForm, localImageUrl],
@@ -271,10 +303,11 @@ export default function AdminPanel() {
       refetchCardCount();
       tierReads.refetch();
       refetchLoadedCard();
+      cardStatsReads.refetch();
       reset();
     }, 900);
     return () => clearTimeout(timer);
-  }, [isSuccess, refetchCardCount, reset, tierReads, refetchLoadedCard]);
+  }, [isSuccess, refetchCardCount, reset, tierReads, refetchLoadedCard, cardStatsReads]);
 
   if (!isConnected) {
     return <div className="page"><p className="msg-info">Connect the owner wallet to open admin tools.</p></div>;
@@ -467,6 +500,26 @@ export default function AdminPanel() {
                 Reset
               </ArcanaButton>
             </div>
+
+            {cardIdBig !== null && cardStats && (
+              <div className="admin-card-stats">
+                <div className="admin-subsection-head" style={{ marginBottom: "var(--space-2)" }}>
+                  <h3>Live Stats — Card #{cardIdBig.toString()}</h3>
+                  <span className="msg-info">refreshes every 6s</span>
+                </div>
+                <div className="admin-stat-grid">
+                  <StatTile label="Pack drops"   value={cardStats.minted.toString()} hint="times minted in packs" />
+                  <StatTile label="Trades"       value={cardStats.trades.toString()} hint={`TWAP active at ≥10 (${cardStats.trades >= 10n ? "active" : "inactive"})`} />
+                  <StatTile label="Last sale"    value={cardStats.lastWei > 0n ? `${formatEther(cardStats.lastWei)} ETH` : "—"} hint="most recent marketplace sale" />
+                  <StatTile label="Avg sale"     value={cardStats.avgWei > 0n ? `${formatEther(cardStats.avgWei)} ETH` : "—"} hint="volume ÷ trades" />
+                  <StatTile label="TWAP"         value={cardStats.twapWei > 0n ? `${formatEther(cardStats.twapWei)} ETH` : "—"} hint="running mean of recorded trades" />
+                  <StatTile label="Base price"   value={cardStats.baseWei > 0n ? `${formatEther(cardStats.baseWei)} ETH` : "—"} hint="admin-set fallback" />
+                  <StatTile label="Effective"    value={cardStats.effWei > 0n ? `${formatEther(cardStats.effWei)} ETH` : "—"} hint="what the weight formula uses" highlight />
+                  <StatTile label="Volume"       value={cardStats.volWei > 0n ? `${formatEther(cardStats.volWei)} ETH` : "—"} hint="cumulative ETH traded" />
+                </div>
+              </div>
+            )}
+
             <Field label="Name">
               <input className="text-input" value={cardForm.name} onChange={(e) => setCardForm({ ...cardForm, name: e.target.value })} placeholder="Archer Captain" />
             </Field>
@@ -668,6 +721,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="field-label">{label}</span>
       {children}
     </label>
+  );
+}
+
+function StatTile({ label, value, hint, highlight }: { label: string; value: string; hint?: string; highlight?: boolean }) {
+  return (
+    <div className={`admin-stat-tile${highlight ? " admin-stat-tile--highlight" : ""}`}>
+      <span className="admin-stat-label">{label}</span>
+      <strong className="admin-stat-value">{value}</strong>
+      {hint && <span className="admin-stat-hint">{hint}</span>}
+    </div>
   );
 }
 

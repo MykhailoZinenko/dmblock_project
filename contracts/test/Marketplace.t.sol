@@ -42,7 +42,7 @@ contract MarketplaceTest is Test {
         nft.mint(seller, 0);
         vm.stopPrank();
 
-        market = new Marketplace(address(nft));
+        market = new Marketplace(address(nft), address(0));
 
         vm.deal(buyer, 10 ether);
         vm.deal(other, 10 ether);

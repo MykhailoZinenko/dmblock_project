@@ -47,6 +47,12 @@ contract PackOpening is Initializable, OwnableUpgradeable {
     mapping(uint256 => uint16) public uniqueTrades;
     mapping(uint256 => PackRequest) public requests;
 
+    // --- Phase 8: marketplace-driven stats (append-only storage) ---
+    address public marketplace;
+    mapping(uint256 => uint64) public mintedCount;
+    mapping(uint256 => uint96) public lastTradePriceWei;
+    mapping(uint256 => uint128) public totalTradeVolumeWei;
+
     error InvalidAddress();
     error InvalidTier();
     error InvalidConfig();
@@ -57,10 +63,13 @@ contract PackOpening is Initializable, OwnableUpgradeable {
     error OnlyCoordinator();
     error PayoutFailed();
     error ReentrantCall();
+    error NotMarketplace();
 
     event TierConfigSet(PackTier indexed tier, uint96 priceWei, uint16 cardCount, uint8 guaranteedRarity, bool enabled);
     event TierPoolSet(PackTier indexed tier, uint256[] cardIds);
     event CardPriceSet(uint256 indexed cardId, uint96 adminBasePriceWei, uint96 twapPriceWei, uint16 uniqueTrades);
+    event MarketplaceSet(address indexed marketplace);
+    event TradeRecorded(uint256 indexed cardId, uint96 priceWei, uint96 newTwapPriceWei, uint16 uniqueTrades);
     event VrfConfigSet(
         address indexed coordinator,
         bytes32 keyHash,
@@ -168,6 +177,12 @@ contract PackOpening is Initializable, OwnableUpgradeable {
         }
 
         uint256 firstTokenId = cardNFT.batchMint(request.player, cardIds);
+
+        // Bump pack-drop counter per card. uint64 holds ~1.8e19, no overflow concern.
+        for (uint256 i = 0; i < cardIds.length; i++) {
+            unchecked { mintedCount[cardIds[i]] += 1; }
+        }
+
         emit PackOpened(requestId, request.player, request.tier, firstTokenId, cardIds);
     }
 
@@ -203,6 +218,42 @@ contract PackOpening is Initializable, OwnableUpgradeable {
         twapPriceWei[cardId] = currentTwapPriceWei;
         uniqueTrades[cardId] = tradeCount;
         emit CardPriceSet(cardId, basePriceWei, currentTwapPriceWei, tradeCount);
+    }
+
+    /// @notice Authorize the marketplace that may call recordTrade. Set to address(0) to disable.
+    function setMarketplace(address newMarketplace) external onlyOwner {
+        marketplace = newMarketplace;
+        emit MarketplaceSet(newMarketplace);
+    }
+
+    /// @notice Marketplace-only hook that updates per-card trade stats. Reverts only on auth;
+    ///         silently no-ops on out-of-range card or zero price so a misbehaving call can
+    ///         never block a trade settlement.
+    function recordTrade(uint256 cardId, uint96 priceWei) external {
+        if (msg.sender != marketplace) revert NotMarketplace();
+        if (cardId >= gameConfig.getCardCount() || priceWei == 0) return;
+
+        uint16 trades = uniqueTrades[cardId];
+        uint96 prevTwap = twapPriceWei[cardId];
+
+        // Running mean. Resets the seed when no recorded trades or no prior TWAP set.
+        uint96 newTwap;
+        if (trades == 0 || prevTwap == 0) {
+            newTwap = priceWei;
+        } else {
+            newTwap = uint96((uint256(prevTwap) * trades + priceWei) / (uint256(trades) + 1));
+        }
+        twapPriceWei[cardId] = newTwap;
+
+        // Cap counter at uint16 max — 65535 trades is plenty and avoids overflow.
+        if (trades < type(uint16).max) {
+            unchecked { uniqueTrades[cardId] = trades + 1; }
+        }
+
+        lastTradePriceWei[cardId] = priceWei;
+        totalTradeVolumeWei[cardId] += uint128(priceWei);
+
+        emit TradeRecorded(cardId, priceWei, newTwap, uniqueTrades[cardId]);
     }
 
     function setVrfConfig(
