@@ -17,12 +17,6 @@ import {
   HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_Y_OFFSET,
 } from './constants';
 
-const SMALLBAR_BASE = '/assets/ui/bars/smallbar_base.png';
-const SMALLBAR_FILL = '/assets/ui/bars/smallbar_fill.png';
-const HP_BAR_SCALE = 0.3;
-const HP_BAR_FILL_INSET_X = 8;
-const HP_BAR_FILL_INSET_Y = 10;
-
 export interface AttackableTarget {
   unitUid: number;
   cells: HexCoord[];
@@ -33,9 +27,7 @@ interface UnitEntry {
   uid: number;
   anim: AnimationController;
   container: Container;
-  hpBarContainer: Container;
-  hpBarFill: Sprite | null;
-  hpBarFillFullWidth: number;
+  hpBar: Graphics;
   label: Text;
   currentHp: number;
   maxHp: number;
@@ -102,27 +94,11 @@ export class BattleScene {
     const container = anim.getContainer();
     container.position.set(pos.x, pos.y);
 
-    // HP bar using smallbar assets
-    const hpBarContainer = new Container();
-    hpBarContainer.position.set(0, HP_BAR_Y_OFFSET);
-
-    const baseTex = await this.engine.textures.load('smallbar_base', SMALLBAR_BASE);
-    const baseSprite = new Sprite(baseTex);
-    baseSprite.anchor.set(0.5, 0.5);
-    baseSprite.scale.set(HP_BAR_SCALE, HP_BAR_SCALE);
-    hpBarContainer.addChild(baseSprite);
-
-    const fillTex = await this.engine.textures.load('smallbar_fill', SMALLBAR_FILL);
-    const fillSprite = new Sprite(fillTex);
-    fillSprite.anchor.set(0, 0.5);
-    const fillFullWidth = (baseTex.width - HP_BAR_FILL_INSET_X * 2) * HP_BAR_SCALE;
-    fillSprite.scale.set(HP_BAR_SCALE, HP_BAR_SCALE);
-    fillSprite.position.set(-fillFullWidth / 2, 0);
-    // Stretch fill to match bar width
-    fillSprite.scale.x = fillFullWidth / fillTex.width;
-    hpBarContainer.addChild(fillSprite);
-
-    container.addChild(hpBarContainer);
+    // HP bar
+    const hpBar = new Graphics();
+    this.drawHpBar(hpBar, unit.currentHp, unit.maxHp);
+    hpBar.position.set(0, HP_BAR_Y_OFFSET);
+    container.addChild(hpBar);
 
     // Name label
     const card = getCard(unit.cardId);
@@ -140,9 +116,7 @@ export class BattleScene {
       uid: unit.uid,
       anim,
       container,
-      hpBarContainer,
-      hpBarFill: fillSprite,
-      hpBarFillFullWidth: fillFullWidth,
+      hpBar,
       label: lbl,
       currentHp: unit.currentHp,
       maxHp: unit.maxHp,
@@ -244,11 +218,10 @@ export class BattleScene {
 
   updateHpBar(uid: number, currentHp: number, maxHp: number): void {
     const entry = this.units.get(uid);
-    if (!entry || !entry.hpBarFill) return;
+    if (!entry) return;
     entry.currentHp = currentHp;
     entry.maxHp = maxHp;
-    const ratio = maxHp > 0 ? Math.max(0, Math.min(1, currentHp / maxHp)) : 0;
-    entry.hpBarFill.scale.x = (entry.hpBarFillFullWidth * ratio) / entry.hpBarFill.texture.width;
+    this.drawHpBar(entry.hpBar, currentHp, maxHp);
   }
 
   // ── Highlights ───────────────────────────────────────
@@ -381,4 +354,32 @@ export class BattleScene {
     this.engine.stage.removeChild(this.unitLayer);
   }
 
+  // ── Private ──────────────────────────────────────────
+
+  private drawHpBar(gfx: Graphics, currentHp: number, maxHp: number): void {
+    gfx.clear();
+    const ratio = maxHp > 0 ? Math.max(0, Math.min(1, currentHp / maxHp)) : 0;
+    const w = HP_BAR_WIDTH;
+    const h = HP_BAR_HEIGHT;
+    const x = -w / 2;
+
+    // Dark border
+    gfx.lineStyle(1, 0x111111);
+    gfx.beginFill(0x1a1a1a, 0.8);
+    gfx.drawRect(x - 1, -1, w + 2, h + 2);
+    gfx.endFill();
+
+    // Fill
+    let color = 0x2ecc71;
+    if (ratio <= 0.25) color = 0xe74c3c;
+    else if (ratio <= 0.5) color = 0xf1c40f;
+
+    const fillW = w * ratio;
+    if (fillW > 0) {
+      gfx.lineStyle(0);
+      gfx.beginFill(color, 1);
+      gfx.drawRect(x, 0, fillW, h);
+      gfx.endFill();
+    }
+  }
 }
