@@ -5,7 +5,7 @@ import { Container } from '../engine/nodes/Container';
 import { Graphics } from '../engine/nodes/Graphics';
 import { Sprite } from '../engine/nodes/Sprite';
 import { Text } from '../engine/nodes/Text';
-import { AnimationController, getAttackDirection, type AttackDirection } from './AnimationController';
+import { AnimationController, type AttackDirection } from './AnimationController';
 import { hex2px } from './hexUtils';
 import { getCard, isBuilding } from './cardRegistry';
 import { AnimatedSprite } from '../engine/nodes/AnimatedSprite';
