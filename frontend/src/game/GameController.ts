@@ -35,6 +35,11 @@ export class GameController {
 
   // --- Lifecycle ---
 
+  /** True after `startGame` — multiplayer may have a controller instance while decks are still exchanging. */
+  isGameStarted(): boolean {
+    return this.state !== undefined;
+  }
+
   startGame(seed: number, decks?: [number[], number[]]): void {
     this.state = createGameState(seed, decks);
     this.state.turnNumber = 1;

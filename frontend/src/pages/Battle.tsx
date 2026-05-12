@@ -77,7 +77,7 @@ export default function Battle() {
     if (!isMultiplayer || !conn) return;
     conn.send({ type: 'action', action });
     conn.sendToServer({ type: 'action', action });
-    if (ctrl) {
+    if (ctrl?.isGameStarted()) {
       const h = hashState(ctrl.getState());
       conn.send({ type: 'state-hash', hash: h });
     }
@@ -111,7 +111,7 @@ export default function Battle() {
 
   const syncUI = useCallback(() => {
     const ctrl = ctrlRef.current;
-    if (!ctrl) return;
+    if (!ctrl?.isGameStarted()) return;
     const s = ctrl.getState();
     if (isMultiplayer && matchRef.current) {
       matchRef.current.setUiActivePlayer(getActivePlayer());
@@ -1175,7 +1175,7 @@ export default function Battle() {
                   </ArcanaBar>
                 </div>
                 <span
-                  onClick={() => { const s = ctrlRef.current?.getState(); if (s) { s.players[0].mana += 5; syncUI(); } }}
+                  onClick={() => { const c = ctrlRef.current; if (c?.isGameStarted()) { c.getState().players[0].mana += 5; syncUI(); } }}
                   style={{ cursor: 'pointer', color: '#6699ff', fontSize: 'var(--text-xs)', opacity: 0.6 }}
                 >+5</span>
               </div>
@@ -1211,7 +1211,7 @@ export default function Battle() {
                   </ArcanaBar>
                 </div>
                 <span
-                  onClick={() => { const s = ctrlRef.current?.getState(); if (s) { s.players[1].mana += 5; syncUI(); } }}
+                  onClick={() => { const c = ctrlRef.current; if (c?.isGameStarted()) { c.getState().players[1].mana += 5; syncUI(); } }}
                   style={{ cursor: 'pointer', color: '#ff6666', fontSize: 'var(--text-xs)', opacity: 0.6 }}
                 >+5</span>
               </div>
@@ -1322,12 +1322,12 @@ export default function Battle() {
       {/* ─── Card Picker ──────────────────────────── */}
       <CardPicker
         currentMana={
-          isMultiplayer && matchRef.current && ctrlRef.current
+          isMultiplayer && matchRef.current && ctrlRef.current?.isGameStarted()
             ? ctrlRef.current.getState().players[matchRef.current.playerIndex].mana
             : mana[activePlayer]
         }
         handCardIds={
-          isMultiplayer && matchRef.current && ctrlRef.current
+          isMultiplayer && matchRef.current && ctrlRef.current?.isGameStarted()
             ? ctrlRef.current.getState().players[matchRef.current.playerIndex].hand
             : undefined
         }
