@@ -35,16 +35,26 @@ type Tier = {
   label: string;
   price: bigint;
   count: number;
-  guarantee: string;
+  guaranteedRarity: number;
+  enabled: boolean;
   variant: "blue" | "red";
 };
 
-const TIERS: Tier[] = [
-  { id: 0, label: "Common", price: parseEther("0.002"), count: 4, guarantee: "Mostly commons", variant: "blue" },
-  { id: 1, label: "Rare", price: parseEther("0.0075"), count: 5, guarantee: "1 Rare or higher", variant: "blue" },
-  { id: 2, label: "Epic", price: parseEther("0.02"), count: 6, guarantee: "1 Epic or higher", variant: "red" },
-  { id: 3, label: "Legendary", price: parseEther("0.075"), count: 7, guarantee: "1 Legendary", variant: "red" },
+const TIER_LABELS = ["Common", "Rare", "Epic", "Legendary"] as const;
+const TIER_VARIANTS: ("blue" | "red")[] = ["blue", "blue", "red", "red"];
+
+// Fallback shown while on-chain configs are loading.
+const TIER_DEFAULTS: Tier[] = [
+  { id: 0, label: "Common", price: parseEther("0.002"), count: 4, guaranteedRarity: 0, enabled: true, variant: "blue" },
+  { id: 1, label: "Rare", price: parseEther("0.0075"), count: 5, guaranteedRarity: 1, enabled: true, variant: "blue" },
+  { id: 2, label: "Epic", price: parseEther("0.02"), count: 6, guaranteedRarity: 2, enabled: true, variant: "red" },
+  { id: 3, label: "Legendary", price: parseEther("0.075"), count: 7, guaranteedRarity: 3, enabled: true, variant: "red" },
 ];
+
+function guaranteeLabel(rarity: number, tierId: number): string {
+  if (tierId === 0 && rarity === 0) return "Mostly commons";
+  return `1 ${TIER_LABELS[rarity] ?? "Common"} or higher`;
+}
 
 type Pull = {
   requestId: bigint;
@@ -59,7 +69,7 @@ const FACTION_NAMES = ["Castle", "Inferno", "Necropolis", "Dungeon"] as const;
 export default function PackOpening() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const [selectedTier, setSelectedTier] = useState(TIERS[0]);
+  const [selectedTierId, setSelectedTierId] = useState(0);
   const [lastRequestId, setLastRequestId] = useState<bigint | null>(null);
   const [pull, setPull] = useState<Pull | null>(null);
   const [fulfillFiredFor, setFulfillFiredFor] = useState<bigint | null>(null);
@@ -77,6 +87,37 @@ export default function PackOpening() {
     functionName: "vrfCoordinator",
     query: { enabled: configured && isLocalDev },
   });
+
+  // Read tier configs from chain — admin updates surface here automatically.
+  const tierReads = useReadContracts({
+    contracts: TIER_LABELS.map((_, tier) => ({
+      ...CONTRACTS.packOpening,
+      functionName: "tierConfigs" as const,
+      args: [tier],
+    })),
+    query: { enabled: configured, refetchInterval: 8000 },
+  });
+
+  const tiers: Tier[] = useMemo(() => {
+    return TIER_LABELS.map((label, id) => {
+      const row = tierReads.data?.[id];
+      if (row?.status === "success" && Array.isArray(row.result) && row.result.length === 4) {
+        const [priceWei, cardCount, guaranteedRarity, enabled] = row.result as [bigint, number, number, boolean];
+        return {
+          id,
+          label,
+          price: priceWei,
+          count: Number(cardCount),
+          guaranteedRarity: Number(guaranteedRarity),
+          enabled,
+          variant: TIER_VARIANTS[id],
+        };
+      }
+      return TIER_DEFAULTS[id];
+    });
+  }, [tierReads.data]);
+
+  const selectedTier = tiers[selectedTierId] ?? TIER_DEFAULTS[0];
 
   useWatchContractEvent({
     ...CONTRACTS.packOpening,
@@ -115,6 +156,12 @@ export default function PackOpening() {
       reset();
     },
   });
+
+  // Refetch tier configs when a write completes — covers admin re-opening this tab after edits.
+  useEffect(() => {
+    if (!isSuccess) return;
+    tierReads.refetch();
+  }, [isSuccess, tierReads]);
 
   // Dev-only: auto-fulfill the mock VRF coordinator so the local flow doesn't hang.
   useEffect(() => {
@@ -179,11 +226,6 @@ export default function PackOpening() {
     });
   }, [pull, pullCardData, uniquePullCardIds]);
 
-  const selectedIndex = useMemo(
-    () => TIERS.findIndex((tier) => tier.id === selectedTier.id),
-    [selectedTier.id],
-  );
-
   if (!isConnected) {
     return <div className="page"><p className="msg-info">Connect your wallet to open packs.</p></div>;
   }
@@ -192,7 +234,7 @@ export default function PackOpening() {
   const waitingForVrf = !!lastRequestId && !pull;
 
   const buyPack = () => {
-    if (!configured) return;
+    if (!configured || !selectedTier.enabled) return;
     writeContract({
       ...CONTRACTS.packOpening,
       functionName: "buyPack",
@@ -229,22 +271,23 @@ export default function PackOpening() {
       <section>
         <div className="section-title">
           <h2>Choose Tier</h2>
-          <span className="msg-info">{formatEther(selectedTier.price)} ETH</span>
+          <span className="msg-info">{formatEther(selectedTier.price)} ETH · live from chain</span>
         </div>
         <div className="card-grid">
-          {TIERS.map((tier) => (
+          {tiers.map((tier) => (
             <ArcanaPanel key={tier.id} variant={tier.id === selectedTier.id ? "carved" : "slate"}>
               <button
                 className="btn-plain"
-                onClick={() => setSelectedTier(tier)}
-                style={{ width: "100%", textAlign: "left", padding: "var(--space-3)" }}
+                onClick={() => setSelectedTierId(tier.id)}
+                disabled={!tier.enabled}
+                style={{ width: "100%", textAlign: "left", padding: "var(--space-3)", opacity: tier.enabled ? 1 : 0.4 }}
               >
                 <span className="page-kicker">{tier.count} cards</span>
                 <strong style={{ display: "block", marginTop: 6, color: "var(--color-parchment)" }}>
-                  {tier.label} Pack
+                  {tier.label} Pack {!tier.enabled && "(disabled)"}
                 </strong>
                 <span className="msg-info" style={{ display: "block", marginTop: 8 }}>
-                  {tier.guarantee}
+                  {guaranteeLabel(tier.guaranteedRarity, tier.id)}
                 </span>
                 <span className="msg-info" style={{ display: "block", marginTop: 8 }}>
                   {formatEther(tier.price)} ETH
@@ -258,14 +301,18 @@ export default function PackOpening() {
       <section className="soft-panel">
         <div className="section-title">
           <h2>Purchase</h2>
-          <span className="msg-info">{TIERS[selectedIndex]?.label ?? "Common"}</span>
+          <span className="msg-info">{selectedTier.label}</span>
         </div>
         <ArcanaButton
           variant={selectedTier.variant}
           onClick={buyPack}
-          disabled={!configured || txInProgress || waitingForVrf}
+          disabled={!configured || !selectedTier.enabled || txInProgress || waitingForVrf}
         >
-          {waitingForVrf ? "Waiting for VRF" : `Buy for ${formatEther(selectedTier.price)} ETH`}
+          {waitingForVrf
+            ? "Waiting for VRF"
+            : !selectedTier.enabled
+              ? "Tier disabled"
+              : `Buy for ${formatEther(selectedTier.price)} ETH`}
         </ArcanaButton>
       </section>
 

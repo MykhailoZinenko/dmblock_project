@@ -7,13 +7,13 @@ import { DuelManagerAbi } from "./abi/DuelManager";
 import { FreedomRecordAbi } from "./abi/FreedomRecord";
 
 export const ADDRESSES = {
-  gameConfig: "0x4631BCAbD6dF18D94796344963cB60d44a4136b6",
-  cardNFT: "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D",
-  heroNFT: "0x3155755b79aA083bd953911C92705B7aA82a18F9",
-  marketplace: "0xab16A69A5a8c12C732e0DEFF4BE56A70bb64c926",
-  packOpening: "0x19cEcCd6942ad38562Ee10bAfd44776ceB67e923",
-  duelManager: "0xCA8c8688914e0F7096c920146cd0Ad85cD7Ae8b9",
-  freedomRecord: "0xB0f05d25e41FbC2b52013099ED9616f1206Ae21B",
+  gameConfig: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+  cardNFT: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  heroNFT: "0x4A679253410272dd5232B3Ff7cF5dbB88f295319",
+  marketplace: "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf",
+  packOpening: "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
+  duelManager: "0x51a1ceb83b83f1985a81c295d1ff28afef186e02",
+  freedomRecord: "0x36b58f5c1969b7b6591d752ea6f5486d069010ab",
 } as const;
 
 export const CONTRACTS = {

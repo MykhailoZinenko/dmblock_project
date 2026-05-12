@@ -8,6 +8,7 @@ import Marketplace from "./pages/Marketplace";
 import PackOpening from "./pages/PackOpening";
 import DeckBuilder from "./pages/DeckBuilder";
 import Battle from "./pages/Battle";
+import AdminPanel from "./pages/AdminPanel";
 import TestRunner from "./pages/TestRunner";
 import VisualIndex from "./pages/tests/VisualIndex";
 import Visual01 from "./pages/tests/Visual01";
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/packs" element={<PackOpening />} />
         <Route path="/decks" element={<DeckBuilder />} />
+        <Route path="/admin" element={<AdminPanel />} />
         <Route path="/tests" element={<TestRunner />} />
         <Route path="/tests/visual" element={<VisualIndex />} />
         <Route path="/tests/perf" element={<PerfRunner />} />
