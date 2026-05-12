@@ -78,17 +78,16 @@ function applySpellDamage(
   card: ReturnType<typeof getCard>,
 ): { damage: number; died: boolean } {
   const targetCard = getCard(target.cardId);
-  let damage = Math.max(1, spellPower - target.defense);
+  let damage = spellPower;
 
-  if (target.magicResistance > 0) {
-    const targetIsBuilding = isBuilding(targetCard);
-    if (targetIsBuilding && card.faction === Faction.INFERNO) {
-      // Inferno bypasses building MR
-    } else {
-      damage = Math.max(1, Math.floor(damage * (1 - target.magicResistance / 100)));
-    }
+  const targetIsBuilding = isBuilding(targetCard);
+  if (targetIsBuilding && card.faction === Faction.INFERNO) {
+    // Inferno bypasses building MR (physical conversion)
+  } else if (target.magicResistance > 0) {
+    damage = Math.floor(damage * (1 - target.magicResistance / 100));
   }
 
+  damage = Math.max(1, damage);
   const died = applyDamage(state, target.uid, damage);
   return { damage, died };
 }
