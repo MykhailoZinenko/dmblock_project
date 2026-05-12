@@ -186,32 +186,6 @@ export default function Battle() {
     prioRef.current = newPrio;
   }, []);
 
-  const scheduleAutoEnd = useCallback(() => {
-    const ctrl = ctrlRef.current;
-    const engine = engineRef.current;
-    if (!ctrl || !engine) return;
-    const cu = ctrl.getCurrentUnit();
-    if (!cu || cu.remainingAp > 0) return;
-
-    const releasedUid = cu.uid;
-    let elapsed = 0;
-    const tick = (dt: number) => {
-      elapsed += dt;
-      if (elapsed >= AUTO_END_DELAY) {
-        engine.ticker.remove(tick);
-        trackActivated(releasedUid);
-        ctrl.passActivation();
-        sceneRef.current?.clearHighlights();
-        resetTimer();
-        advanceTurn();
-        if (isMultiplayer && connRef.current) {
-          sendAction({ type: 'pass', releasedUnitUid: releasedUid });
-        }
-      }
-    };
-    engine.ticker.add(tick);
-  }, [isMultiplayer, trackActivated, advanceTurn, resetTimer, sendAction]);
-
   const resetTimer = useCallback(() => {
     timerRef.current = ACTIVATION_TIMER_SECONDS;
     setTimer(ACTIVATION_TIMER_SECONDS);
@@ -323,6 +297,32 @@ export default function Battle() {
     }
     syncUI();
   }, [syncUI, showActiveUnitHL, resetTimer]);
+
+  const scheduleAutoEnd = useCallback(() => {
+    const ctrl = ctrlRef.current;
+    const engine = engineRef.current;
+    if (!ctrl || !engine) return;
+    const cu = ctrl.getCurrentUnit();
+    if (!cu || cu.remainingAp > 0) return;
+
+    const releasedUid = cu.uid;
+    let elapsed = 0;
+    const tick = (dt: number) => {
+      elapsed += dt;
+      if (elapsed >= AUTO_END_DELAY) {
+        engine.ticker.remove(tick);
+        trackActivated(releasedUid);
+        ctrl.passActivation();
+        sceneRef.current?.clearHighlights();
+        resetTimer();
+        advanceTurn();
+        if (isMultiplayer && connRef.current) {
+          sendAction({ type: 'pass', releasedUnitUid: releasedUid });
+        }
+      }
+    };
+    engine.ticker.add(tick);
+  }, [isMultiplayer, trackActivated, advanceTurn, resetTimer, sendAction]);
 
   const onCardSelect = useCallback((cardId: number) => {
     if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
