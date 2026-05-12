@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
   useAccount,
   useReadContract,
@@ -7,7 +8,10 @@ import {
 } from "wagmi";
 import { formatEther, parseEther } from "viem";
 import { CONTRACTS } from "../contracts";
+import { useHero } from "../hooks/useHero";
 import { useDuelLobby, type DuelInfo } from "../hooks/useDuelLobby";
+import { listDecks } from "../lib/deckStorage";
+import { DECK_SIZE } from "../lib/deckValidation";
 import { ArcanaButton, ArcanaPanel, ArcanaRibbon } from "../ui/components/index";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -25,10 +29,17 @@ function formatTimeLeft(seconds: number): string {
 
 export default function DuelLobby() {
   const { address, isConnected } = useAccount();
+  const { hasHero, isLoading: heroLoading } = useHero();
   const {
     otherOpenDuels, myOpenDuels, myActiveDuels, myHistory,
     playerStats, refetch,
   } = useDuelLobby();
+
+  const hasValidDeck = useMemo(() => {
+    if (!address) return false;
+    const decks = listDecks(address);
+    return decks.some((d) => d.slots.filter((s) => s !== null).length === DECK_SIZE);
+  }, [address]);
 
   const [betEth, setBetEth] = useState("");
 
@@ -55,6 +66,38 @@ export default function DuelLobby() {
           </div>
           <ArcanaRibbon variant="blue">Wallet Required</ArcanaRibbon>
         </div>
+      </div>
+    );
+  }
+
+  if (!heroLoading && !hasHero) {
+    return (
+      <div className="page page-shell">
+        <div className="page-hero">
+          <div>
+            <div className="page-kicker">Ranked Wagering</div>
+            <h1 className="page-title">Duel Lobby</h1>
+            <p className="page-copy">You need a hero before you can enter the arena.</p>
+          </div>
+          <ArcanaRibbon variant="red">No Hero</ArcanaRibbon>
+        </div>
+        <Link to="/create"><ArcanaButton variant="blue" size="lg">Create Your Hero</ArcanaButton></Link>
+      </div>
+    );
+  }
+
+  if (hasHero && !hasValidDeck) {
+    return (
+      <div className="page page-shell">
+        <div className="page-hero">
+          <div>
+            <div className="page-kicker">Ranked Wagering</div>
+            <h1 className="page-title">Duel Lobby</h1>
+            <p className="page-copy">You need a valid 20-card deck before you can duel. Build one in the Deck Builder.</p>
+          </div>
+          <ArcanaRibbon variant="red">No Deck</ArcanaRibbon>
+        </div>
+        <Link to="/decks"><ArcanaButton variant="blue" size="lg">Build a Deck</ArcanaButton></Link>
       </div>
     );
   }
