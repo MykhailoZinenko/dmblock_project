@@ -92,6 +92,15 @@ export class GameController {
     this.emit('activationEnd', { unit: currentUnit });
 
     this.state.currentActivationIndex++;
+
+    // Skip dead units
+    while (
+      this.state.currentActivationIndex < this.state.activationQueue.length &&
+      !this.state.activationQueue[this.state.currentActivationIndex].alive
+    ) {
+      this.state.currentActivationIndex++;
+    }
+
     this.emit('stateChange', this.state);
 
     if (this.state.currentActivationIndex < this.state.activationQueue.length) {
