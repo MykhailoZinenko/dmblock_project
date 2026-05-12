@@ -4,7 +4,7 @@
 
 ## Battle System Progress
 
-### Game Logic Complete (325 tests, >99% coverage)
+### Game Logic Complete (339 tests, >99% coverage)
 - **types.ts** — CardDefinition, UnitInstance, PlayerState, BoardCell, DamageType, AbilityDefinition
 - **cardRegistry.ts** — 20 cards: stats, abilities, damageType, powerMultiplier, spriteKeys, fxKeys
 - **hexUtils.ts** — Pointy-top odd-r: hex2px, px2hex, distance, neighbors, rings, direction
@@ -18,12 +18,13 @@
 - **moveUnit.ts** — Reachable hexes, AP cost, board updates
 - **combat.ts** — Damage formula (atk-def, MR, Inferno bypass buildings, crit)
 - **attackUnit.ts** — Melee (adjacent, retaliation) + Ranged (enemy half ×0.5, melee block ×0.5, ammo, Marksman bypass) + **getAutoWalkHex/getAutoWalkTargets** for click-to-attack
+- **castSpell.ts** — Spell targeting, success roll, damage/heal, status effects (slow/polymorph/curse), AoE, tickStatusEffects
 - **spriteConfig.ts** — Animation definitions for all 20 cards + FX + polymorph sheep
 
 ### Battle Rendering (New Architecture)
 - **AnimationController.ts** — Per-unit animation state machine: idle/run/attack/death transitions, texture caching, direction picking, fade
-- **BattleScene.ts** — Engine-side manager: grid, unit sprites, HP bars, highlights (green move, red direct attack, orange auto-walk), smooth movement tweens, damage numbers, projectile animation, death animation + fade
-- **Battle.tsx** — React HUD (Arcana components) + input bridge, click-to-attack with directional auto-walk, auto-end activation when AP exhausted
+- **BattleScene.ts** — Engine-side manager: grid, unit sprites, HP bars, highlights, smooth movement, damage/heal numbers, projectile, death animation, spell FX, polymorph sheep swap
+- **Battle.tsx** — React HUD (Arcana components) + input bridge, click-to-attack, spell targeting, auto-end activation
 
 ### Battle UI Features
 - 15×11 hex grid with deploy zones
@@ -38,9 +39,15 @@
 - Floating damage numbers (with crit display)
 - Auto-end activation when AP exhausted (0.4s delay)
 - HP bars with color coding (green > yellow > red)
+- Spell casting: 7 spells (Healing, Blast, Storm, Surge, Inferno, Polymorph, Curse)
+- Spell target selection via hex highlights (purple enemies, green allies, orange AoE)
+- Spell FX animations from spellFxConfigs
+- Success/fail roll with "FIZZLE!" on failure (mana still spent)
+- Status effects: Slow (speed -1), Polymorph (sheep sprite, stats zeroed), Curse (stats halved)
+- Status effects tick down on turn end, auto-expire and restore original stats
+- Floating heal numbers (green +N), status text (purple)
 
 ### Not Yet Wired to UI
-- Spell casting (logic exists in plan, UI not connected)
 - Hero barrier + win condition
 - Activation timer + timeout damage
 - Abilities (B15–B25)
@@ -79,5 +86,5 @@
 ```bash
 cd contracts && forge test                              # 130 tests
 cd frontend && npm run dev                              # localhost:5173/battle
-cd frontend && npx vitest run src/game/__tests__/       # 325 tests
+cd frontend && npx vitest run src/game/__tests__/       # 339 tests
 ```
