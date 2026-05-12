@@ -177,7 +177,7 @@ export function tickStatusEffects(state: GameState): number[] {
   const expiredUids: number[] = [];
 
   for (const unit of state.units) {
-    if (!unit.alive || unit.activeEffects.length === 0) continue;
+    if (!unit.alive || !unit.activeEffects?.length) continue;
 
     const remaining: ActiveEffect[] = [];
     for (const effect of unit.activeEffects) {

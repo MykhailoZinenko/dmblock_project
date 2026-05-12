@@ -3,6 +3,7 @@ import type { GameState } from './GameState';
 import { buildInitiativeQueue } from './initiative';
 import { MANA_PER_TURN, MANA_CAP } from './constants';
 import type { UnitInstance, GamePhase } from './types';
+import { tickStatusEffects } from './actions/castSpell';
 
 export type GameEvent =
   | 'turnStart'
@@ -14,6 +15,7 @@ export type GameEvent =
   | 'unitAttacked'
   | 'unitDied'
   | 'spellCast'
+  | 'effectExpired'
   | 'gameOver'
   | 'stateChange';
 
@@ -117,6 +119,11 @@ export class GameController {
         unit.remainingAp = unit.speed;
         unit.retaliatedThisTurn = false;
       }
+    }
+
+    const expiredUids = tickStatusEffects(this.state);
+    for (const uid of expiredUids) {
+      this.emit('effectExpired', { uid });
     }
 
     // Rebuild queue
