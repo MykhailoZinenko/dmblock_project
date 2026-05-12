@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
+import { useAccount } from 'wagmi';
 import { Engine } from '../engine/Engine';
 import { BattleScene, type AttackableTarget } from '../game/BattleScene';
 import { hex2px, px2hex, isValidCell } from '../game/hexUtils';
@@ -25,6 +27,10 @@ import { CardType, SpellTargetType } from '../game/types';
 import type { UnitInstance, HexCoord } from '../game/types';
 import { CardPicker } from '../components/CardPicker';
 import { ArcanaPanel, ArcanaButton, ArcanaBar } from '../ui/components/index';
+import { ConnectionManager } from '../multiplayer/ConnectionManager';
+import { MatchManager } from '../multiplayer/MatchManager';
+import { listDecks } from '../lib/deckStorage';
+import { DECK_SIZE } from '../lib/deckValidation';
 
 // ─── Turn phase ────────────────────────────────────────
 type TurnPhase =
@@ -53,6 +59,15 @@ export default function Battle() {
   const engineRef = useRef<Engine | null>(null);
   const ctrlRef = useRef<GameController | null>(null);
   const sceneRef = useRef<BattleScene | null>(null);
+
+  const [searchParams] = useSearchParams();
+  const duelId = searchParams.get('duel') ? Number(searchParams.get('duel')) : null;
+  const { address } = useAccount();
+
+  const connRef = useRef<ConnectionManager | null>(null);
+  const matchRef = useRef<MatchManager | null>(null);
+  const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
+  const isMultiplayer = duelId !== null;
 
   const [phase, setPhase] = useState<TurnPhase>({ type: 'priority', player: 0 });
   const [ui, setUI] = useState<UIMode>({ type: 'pick_card' });
@@ -273,6 +288,7 @@ export default function Battle() {
   }, [syncUI, showActiveUnitHL, resetTimer]);
 
   const onCardSelect = useCallback((cardId: number) => {
+    if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
     const card = getCard(cardId);
     if (card.cardType === CardType.SPELL) {
       const ctrl = ctrlRef.current;
@@ -330,6 +346,7 @@ export default function Battle() {
   }, [showActiveUnitHL]);
 
   const onPass = useCallback(() => {
+    if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
     const ctrl = ctrlRef.current;
     if (!ctrl || gameOverRef.current) return;
 
@@ -364,6 +381,7 @@ export default function Battle() {
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
       if (!ctrl || !scene) return;
+      if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
       const state = ctrl.getState();
       const currentUI = uiRef.current;
       const currentPhase = phaseRef.current;
@@ -655,6 +673,7 @@ export default function Battle() {
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
       if (!ctrl || !scene || gameOverRef.current) return;
+      if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
       const currentUI = uiRef.current;
       const currentPhase = phaseRef.current;
       const state = ctrl.getState();
@@ -800,8 +819,11 @@ export default function Battle() {
       await engine.loadFont('/assets/fonts/PatrickHand.png', '/assets/fonts/PatrickHand.json');
 
       const ctrl = new GameController();
-      ctrl.startGame(Date.now());
       ctrlRef.current = ctrl;
+
+      if (!isMultiplayer) {
+        ctrl.startGame(Date.now());
+      }
 
       const scene = new BattleScene(engine);
       scene.createGrid();
@@ -841,6 +863,17 @@ export default function Battle() {
         }
       });
 
+      engine.canvas.addEventListener('pointermove', (e: PointerEvent) => {
+        const rect = engine!.canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = engine!.camera.screenToWorld(
+          (e.clientX - rect.left) * dpr,
+          (e.clientY - rect.top) * dpr,
+        );
+        const h = px2hex(w.x, w.y);
+        sceneRef.current?.updateHover(h.col, h.row);
+      });
+
       window.addEventListener('keydown', onKD);
       window.addEventListener('keyup', onKU);
       engine.canvas.addEventListener('wheel', (e: WheelEvent) => {
@@ -868,6 +901,80 @@ export default function Battle() {
       engine?.destroy();
     };
   }, []);
+
+  // ─── Multiplayer connection ─────────────────────────
+  useEffect(() => {
+    if (!isMultiplayer || !address || duelId === null) return;
+
+    const conn = new ConnectionManager('ws://localhost:3001');
+    connRef.current = conn;
+
+    conn.on('paired', () => {
+      setMultiplayerStatus('Connected to opponent. Exchanging decks...');
+    });
+
+    conn.on('connected', async () => {
+      const ctrl = ctrlRef.current;
+      if (!ctrl) return;
+
+      const decks = listDecks(address);
+      const validDeck = decks.find((d) => d.slots.filter((s) => s !== null).length === DECK_SIZE);
+      if (!validDeck) {
+        setMultiplayerStatus('No valid deck found!');
+        return;
+      }
+
+      const myDeckIds = validDeck.slots.filter((s): s is number => s !== null);
+
+      const match = new MatchManager(conn);
+      matchRef.current = match;
+
+      const { opponentDeck } = await match.exchangeDecks(myDeckIds);
+      match.startGame(duelId, ctrl);
+
+      match.on('opponent-action', () => {
+        syncUI();
+        const scene = sceneRef.current;
+        const state = ctrl.getState();
+        if (scene) {
+          for (const u of state.units) {
+            if (u.alive) scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
+          }
+          scene.updateHeroHp(0, state.players[0].heroHp, HERO_HP);
+          scene.updateHeroHp(1, state.players[1].heroHp, HERO_HP);
+        }
+      });
+
+      match.on('game-over', (winner: number | null) => {
+        if (winner === null) {
+          setGameOver({ winner: -1 });
+        } else {
+          setGameOver({ winner });
+        }
+        gameOverRef.current = true;
+      });
+
+      match.on('desync', (myHash: string, theirHash: string) => {
+        console.error(`Desync detected! my=${myHash} theirs=${theirHash}`);
+        setMultiplayerStatus('State desync detected!');
+      });
+
+      match.on('opponent-disconnected', () => {
+        setMultiplayerStatus('Opponent disconnected!');
+      });
+
+      setMultiplayerStatus('Battle started!');
+      setTimeout(() => setMultiplayerStatus(''), 2000);
+    });
+
+    setMultiplayerStatus('Waiting for opponent...');
+    conn.join(duelId, address);
+
+    return () => {
+      matchRef.current?.destroy();
+      conn.disconnect();
+    };
+  }, [duelId, address, isMultiplayer]);
 
   // ─── Derived display values ─────────────────────────
   const activePlayer = getActivePlayer();
@@ -1013,6 +1120,30 @@ export default function Battle() {
           display: 'flex', gap: 10, zIndex: 101,
         }}>
           <ArcanaButton variant="blue" size="sm" onClick={onPass}>Pass</ArcanaButton>
+        </div>
+      )}
+
+      {/* ─── Multiplayer Status Overlay ──────────── */}
+      {isMultiplayer && multiplayerStatus && (
+        <div style={{
+          position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.8)', color: 'var(--color-gold)',
+          padding: '6px 20px', borderRadius: 8, fontSize: 14, zIndex: 100,
+          fontFamily: 'var(--font-display)',
+          border: '1px solid var(--color-gold)',
+        }}>
+          {multiplayerStatus}
+        </div>
+      )}
+
+      {isMultiplayer && !multiplayerStatus && matchRef.current && (
+        <div style={{
+          position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.6)', color: matchRef.current.isMyTurn ? '#66ff66' : '#ff6666',
+          padding: '4px 16px', borderRadius: 8, fontSize: 13, zIndex: 100,
+          fontFamily: 'var(--font-display)',
+        }}>
+          {matchRef.current.isMyTurn ? 'Your turn' : "Opponent's turn"}
         </div>
       )}
 
