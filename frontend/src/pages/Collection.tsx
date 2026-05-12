@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { useAccount } from "wagmi";
 import { useOwnedCards } from "../hooks/useOwnedCards";
+import { CardImage } from "../ui/components/CardImage";
 import { ArcanaPanel, ArcanaButton, ArcanaRibbon } from "../ui/components/index";
 
 export default function Collection() {
@@ -43,24 +44,17 @@ export default function Collection() {
         <ArcanaRibbon variant="blue">{count} Cards</ArcanaRibbon>
       </div>
       <div className="card-grid">
-        {cards.map(({ tokenId, metadata }) => (
-          <ArcanaPanel key={tokenId.toString()} variant="slate" style={{ overflow: "hidden" }}>
+        {cards.map((card) => (
+          <ArcanaPanel key={card.tokenId.toString()} variant="slate" style={{ overflow: "hidden" }}>
             <div style={{ padding: "var(--space-2)", textAlign: "center" }}>
-              {metadata?.image ? (
-                <object
-                  data={metadata.image}
-                  type="image/svg+xml"
-                  style={{ width: "100%", borderRadius: "var(--radius-sm)", minHeight: 200 }}
-                >
-                  <p className="msg-info">Card image</p>
-                </object>
-              ) : (
-                <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-dim)" }}>
-                  No image
-                </div>
-              )}
+              <CardImage
+                cardId={card.cardId}
+                stats={card}
+                alt={card.name}
+                style={{ borderRadius: "var(--radius-sm)" }}
+              />
               <p style={{ marginTop: "var(--space-2)", fontSize: "var(--text-sm)", fontWeight: 600, fontFamily: "var(--font-display)", color: "var(--color-parchment)" }}>
-                {metadata?.name ?? `Card #${tokenId}`}
+                {card.name}
               </p>
             </div>
           </ArcanaPanel>

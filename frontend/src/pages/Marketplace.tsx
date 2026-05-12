@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useAccount,
   useReadContract,
@@ -9,15 +9,18 @@ import {
 import { formatEther, parseEther } from "viem";
 import { CONTRACTS, ADDRESSES } from "../contracts";
 import { useOwnedCards } from "../hooks/useOwnedCards";
+import { CardImage, type CardStats } from "../ui/components/CardImage";
 import { ArcanaButton, ArcanaPanel, ArcanaRibbon } from "../ui/components/index";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 type Listing = {
   tokenId: bigint;
+  cardId: number;
   seller: string;
   priceWei: bigint;
-  metadata: { name?: string; image?: string } | null;
+  name: string;
+  stats?: CardStats;
 };
 
 function useAllListings() {
@@ -26,8 +29,11 @@ function useAllListings() {
     functionName: "totalSupply",
   });
   const total = Number(totalSupply ?? 0n);
-  const ids: bigint[] = [];
-  for (let i = 0; i < total; i++) ids.push(BigInt(i));
+  const ids: bigint[] = useMemo(() => {
+    const out: bigint[] = [];
+    for (let i = 0; i < total; i++) out.push(BigInt(i));
+    return out;
+  }, [total]);
 
   const { data: listings, refetch } = useReadContracts({
     contracts: ids.map((id) => ({
@@ -38,35 +44,70 @@ function useAllListings() {
     query: { enabled: total > 0 },
   });
 
-  const active = ids
-    .map((id, i) => {
-      const r = listings?.[i];
-      if (r?.status !== "success") return null;
-      const l = r.result as { seller: string; priceWei: bigint };
-      if (l.seller.toLowerCase() === ZERO) return null;
-      return { tokenId: id, seller: l.seller, priceWei: l.priceWei };
-    })
-    .filter((x): x is { tokenId: bigint; seller: string; priceWei: bigint } => x !== null);
+  const active = useMemo(() => {
+    return ids
+      .map((id, i) => {
+        const r = listings?.[i];
+        if (r?.status !== "success") return null;
+        const l = r.result as { seller: string; priceWei: bigint };
+        if (l.seller.toLowerCase() === ZERO) return null;
+        return { tokenId: id, seller: l.seller, priceWei: l.priceWei };
+      })
+      .filter((x): x is { tokenId: bigint; seller: string; priceWei: bigint } => x !== null);
+  }, [ids, listings]);
 
-  const { data: tokenURIs } = useReadContracts({
+  const { data: tokenCardIds } = useReadContracts({
     contracts: active.map((l) => ({
       ...CONTRACTS.cardNFT,
-      functionName: "tokenURI" as const,
+      functionName: "tokenCardId" as const,
       args: [l.tokenId],
     })),
     query: { enabled: active.length > 0 },
   });
 
-  const items: Listing[] = active.map((l, i) => {
-    const uri = tokenURIs?.[i];
-    let metadata: { name?: string; image?: string } | null = null;
-    if (uri?.status === "success" && typeof uri.result === "string") {
-      try {
-        metadata = JSON.parse(atob(uri.result.replace("data:application/json;base64,", "")));
-      } catch { /* ignore */ }
+  const uniqueCardIds = useMemo(() => {
+    if (!tokenCardIds) return [] as number[];
+    const set = new Set<number>();
+    for (const r of tokenCardIds) {
+      if (r?.status === "success") set.add(Number(r.result as bigint));
     }
-    return { ...l, metadata };
+    return Array.from(set).sort((a, b) => a - b);
+  }, [tokenCardIds]);
+
+  const { data: cardDataResults } = useReadContracts({
+    contracts: uniqueCardIds.map((cid) => ({
+      ...CONTRACTS.gameConfig,
+      functionName: "getCard" as const,
+      args: [BigInt(cid)],
+    })),
+    query: { enabled: uniqueCardIds.length > 0 },
   });
+
+  const items: Listing[] = useMemo(() => {
+    if (!tokenCardIds || !cardDataResults) return [];
+    const dataMap = new Map<number, { name: string; stats: CardStats }>();
+    uniqueCardIds.forEach((cid, i) => {
+      const r = cardDataResults[i];
+      if (r?.status !== "success") return;
+      const card = r.result as { name: string; stats: Record<string, bigint | number> };
+      const s = card.stats;
+      dataMap.set(cid, {
+        name: card.name,
+        stats: {
+          cardType: Number(s.cardType), attack: Number(s.attack), hp: Number(s.hp),
+          defense: Number(s.defense), initiative: Number(s.initiative), manaCost: Number(s.manaCost),
+          spellPower: Number(s.spellPower), duration: Number(s.duration),
+          successChance: Number(s.successChance), school: Number(s.school),
+        },
+      });
+    });
+    return active.map((l, i) => {
+      const r = tokenCardIds[i];
+      const cardId = r?.status === "success" ? Number(r.result as bigint) : -1;
+      const data = dataMap.get(cardId);
+      return { ...l, cardId, name: data?.name ?? `Card #${l.tokenId}`, stats: data?.stats };
+    });
+  }, [active, tokenCardIds, cardDataResults, uniqueCardIds]);
 
   return { items, refetch };
 }
@@ -245,7 +286,7 @@ export default function Marketplace() {
                 className={`btn-outline ${selectedTokenId === c.tokenId ? "selected" : ""}`}
                 onClick={() => setSelectedTokenId(c.tokenId)}
               >
-                #{c.tokenId.toString()} {c.metadata?.name ?? ""}
+                #{c.tokenId.toString()} {c.name}
               </button>
             ))}
           </div>
@@ -287,16 +328,13 @@ function ListingCard({
   return (
     <ArcanaPanel variant="slate" className="listing-card">
       <div className="listing-card-body">
-        {listing.metadata?.image ? (
-          <object data={listing.metadata.image} type="image/svg+xml" className="card-media">
-            <p className="msg-info">Card image</p>
-          </object>
-        ) : (
-          <div className="card-media" style={{ display: "grid", placeItems: "center" }}>
-            <span className="msg-info">No image</span>
-          </div>
-        )}
-        <strong>{listing.metadata?.name ?? `Card #${listing.tokenId.toString()}`}</strong>
+        <CardImage
+          cardId={listing.cardId}
+          stats={listing.stats}
+          alt={listing.name}
+          className="card-media"
+        />
+        <strong>{listing.name}</strong>
         <ArcanaButton variant="blue" size="sm" onClick={onAction} disabled={disabled}>
           {actionLabel}
         </ArcanaButton>

@@ -445,3 +445,32 @@ a, button, [role="button"], input, select, textarea, .clickable {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* CardImage stat overlay */
+.card-image-wrap {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  container-type: inline-size;
+}
+.card-image-png {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.card-image-stats {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.card-image-stat {
+  position: absolute;
+  top: 90.76%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-family: serif;
+  font-weight: bold;
+  font-size: clamp(8px, 2.8cqi, 20px);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  line-height: 1;
+}

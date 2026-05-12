@@ -17,6 +17,7 @@ import {
   deleteDeck,
   type SavedDeck,
 } from "../lib/deckStorage";
+import { CardImage, type CardStats } from "../ui/components/CardImage";
 import { ArcanaButton, ArcanaRibbon } from "../ui/components/index";
 
 type DragPayload =
@@ -33,7 +34,7 @@ const RARITY_COLOR: Record<number, string> = {
 export default function DeckBuilder() {
   const { address, isConnected } = useAccount();
   const { hero, hasHero, isLoading: heroLoading } = useHero();
-  const { ownedCounts, cardMeta, cardImages, uniqueCardIds, isLoading: cardsLoading } = useDeckBuilderData();
+  const { ownedCounts, cardMeta, cardStatsMap, uniqueCardIds, isLoading: cardsLoading } = useDeckBuilderData();
 
   const [slots, setSlots] = useState<(number | null)[]>(() => emptySlots());
   const [deckName, setDeckName] = useState("Main");
@@ -233,7 +234,7 @@ export default function DeckBuilder() {
                 idx={i}
                 cardId={cid}
                 meta={cid !== null ? cardMeta.get(cid) : undefined}
-                image={cid !== null ? cardImages.get(cid) : undefined}
+                stats={cid !== null ? cardStatsMap.get(cid) : undefined}
                 isDragOver={dragOverSlot === i}
                 onClick={() => cid !== null && removeAt(i)}
                 onDragStart={(e) => onSlotDragStart(e, i)}
@@ -288,7 +289,7 @@ export default function DeckBuilder() {
                     key={cid}
                     cardId={cid}
                     meta={meta}
-                    image={cardImages.get(cid)}
+                    stats={cardStatsMap.get(cid)}
                     owned={owned}
                     inDeck={inDeck}
                     cap={cap}
@@ -310,7 +311,7 @@ function DeckSlot(props: {
   idx: number;
   cardId: number | null;
   meta: CardMeta | undefined;
-  image: string | undefined;
+  stats: CardStats | undefined;
   isDragOver: boolean;
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
@@ -318,7 +319,7 @@ function DeckSlot(props: {
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
-  const { cardId, meta, image, isDragOver } = props;
+  const { cardId, meta, stats, isDragOver } = props;
   const filled = cardId !== null;
   const factionColor = meta ? FACTION_COLORS[meta.faction] : "transparent";
   return (
@@ -333,12 +334,8 @@ function DeckSlot(props: {
       onDrop={props.onDrop}
       title={filled ? `${meta?.name ?? `#${cardId}`} — click to remove` : "Empty slot"}
     >
-      {filled && image ? (
-        <object data={image} type="image/svg+xml" className="db-slot-img">
-          <span>{meta?.name}</span>
-        </object>
-      ) : filled ? (
-        <span className="db-slot-name">{meta?.name ?? `#${cardId}`}</span>
+      {filled ? (
+        <CardImage cardId={cardId} stats={stats} alt={meta?.name ?? `#${cardId}`} className="db-slot-img" />
       ) : (
         <span className="db-slot-idx">{props.idx + 1}</span>
       )}
@@ -352,7 +349,7 @@ function DeckSlot(props: {
 function PoolCard(props: {
   cardId: number;
   meta: CardMeta | undefined;
-  image: string | undefined;
+  stats: CardStats | undefined;
   owned: number;
   inDeck: number;
   cap: number;
@@ -360,7 +357,7 @@ function PoolCard(props: {
   onDragStart: (e: React.DragEvent) => void;
   onClick: () => void;
 }) {
-  const { meta, image, owned, inDeck, cap, disabled } = props;
+  const { meta, stats, owned, inDeck, cap, disabled } = props;
   const factionColor = meta ? FACTION_COLORS[meta.faction] : "transparent";
   return (
     <div
@@ -371,13 +368,7 @@ function PoolCard(props: {
       onClick={props.onClick}
       title={disabled ? "All copies already in deck" : "Drag to slot or click to add"}
     >
-      {image ? (
-        <object data={image} type="image/svg+xml" className="db-pool-img">
-          <span>{meta?.name}</span>
-        </object>
-      ) : (
-        <span className="db-pool-name">{meta?.name ?? `#${props.cardId}`}</span>
-      )}
+      <CardImage cardId={props.cardId} stats={stats} alt={meta?.name ?? `#${props.cardId}`} className="db-pool-img" />
       <div className="db-pool-meta">
         <span className="db-pool-name">{meta?.name ?? `#${props.cardId}`}</span>
         <span className="db-pool-count">{inDeck} / {cap} · {owned} owned</span>

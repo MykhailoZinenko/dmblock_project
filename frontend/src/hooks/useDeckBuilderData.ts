@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { CONTRACTS } from "../contracts";
 import type { CardMeta } from "../lib/deckValidation";
+import type { CardStats } from "../ui/components/CardImage";
 
 export type OwnedTokenInfo = {
   tokenId: bigint;
@@ -77,53 +78,36 @@ export function useDeckBuilderData() {
     query: { enabled: uniqueCardIds.length > 0 },
   });
 
-  const cardMeta = useMemo(() => {
-    const m = new Map<number, CardMeta>();
-    if (!cardDataResults) return m;
+  const { cardMeta, cardStatsMap } = useMemo(() => {
+    const meta = new Map<number, CardMeta>();
+    const stats = new Map<number, CardStats>();
+    if (!cardDataResults) return { cardMeta: meta, cardStatsMap: stats };
     uniqueCardIds.forEach((cid, i) => {
       const r = cardDataResults[i];
       if (r?.status !== "success") return;
-      const card = r.result as { name: string; stats: { cardType: number; rarity: number; faction: number } };
-      m.set(cid, {
+      const card = r.result as { name: string; stats: Record<string, bigint | number> };
+      const s = card.stats;
+      meta.set(cid, {
         name: card.name,
-        cardType: Number(card.stats.cardType),
-        rarity: Number(card.stats.rarity),
-        faction: Number(card.stats.faction),
+        cardType: Number(s.cardType),
+        rarity: Number(s.rarity),
+        faction: Number(s.faction),
+      });
+      stats.set(cid, {
+        cardType: Number(s.cardType),
+        attack: Number(s.attack),
+        hp: Number(s.hp),
+        defense: Number(s.defense),
+        initiative: Number(s.initiative),
+        manaCost: Number(s.manaCost),
+        spellPower: Number(s.spellPower),
+        duration: Number(s.duration),
+        successChance: Number(s.successChance),
+        school: Number(s.school),
       });
     });
-    return m;
+    return { cardMeta: meta, cardStatsMap: stats };
   }, [uniqueCardIds, cardDataResults]);
-
-  // One representative tokenId per cardId, to fetch a single SVG per unique card
-  const representativeTokenIds = useMemo(() => {
-    const seen = new Map<number, bigint>();
-    for (const t of ownedTokens) if (!seen.has(t.cardId)) seen.set(t.cardId, t.tokenId);
-    return uniqueCardIds.map((cid) => seen.get(cid)!).filter((id) => id !== undefined);
-  }, [ownedTokens, uniqueCardIds]);
-
-  const { data: tokenURIs } = useReadContracts({
-    contracts: representativeTokenIds.map((id) => ({
-      ...CONTRACTS.cardNFT,
-      functionName: "tokenURI" as const,
-      args: [id],
-    })),
-    query: { enabled: representativeTokenIds.length > 0 },
-  });
-
-  const cardImages = useMemo(() => {
-    const m = new Map<number, string>();
-    if (!tokenURIs) return m;
-    uniqueCardIds.forEach((cid, i) => {
-      const r = tokenURIs[i];
-      if (r?.status !== "success" || typeof r.result !== "string") return;
-      try {
-        const json = atob(r.result.replace("data:application/json;base64,", ""));
-        const parsed = JSON.parse(json) as { image?: string };
-        if (parsed.image) m.set(cid, parsed.image);
-      } catch { /* ignore */ }
-    });
-    return m;
-  }, [uniqueCardIds, tokenURIs]);
 
   const isLoading =
     isConnected &&
@@ -132,5 +116,5 @@ export function useDeckBuilderData() {
       (ownedTokenIds.length > 0 && !tokenCardIds) ||
       (uniqueCardIds.length > 0 && !cardDataResults));
 
-  return { ownedTokens, ownedCounts, cardMeta, cardImages, uniqueCardIds, isLoading };
+  return { ownedTokens, ownedCounts, cardMeta, cardStatsMap, uniqueCardIds, isLoading };
 }

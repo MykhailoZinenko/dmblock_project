@@ -10,6 +10,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { ADDRESSES, CONTRACTS } from "../contracts";
+import { CardImage, type CardStats } from "../ui/components/CardImage";
 import { ArcanaButton, ArcanaPanel, ArcanaRibbon } from "../ui/components/index";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -45,12 +46,6 @@ const TIERS: Tier[] = [
   { id: 3, label: "Legendary", price: parseEther("0.075"), count: 7, guarantee: "1 Legendary", variant: "red" },
 ];
 
-type CardMeta = {
-  name?: string;
-  image?: string;
-  attributes?: { trait_type: string; value: string | number }[];
-};
-
 type Pull = {
   requestId: bigint;
   tier: number;
@@ -58,15 +53,8 @@ type Pull = {
   cardIds: bigint[];
 };
 
-function parseTokenUri(uri: string | undefined): CardMeta | null {
-  if (!uri || !uri.startsWith("data:application/json;base64,")) return null;
-  try {
-    const json = atob(uri.replace("data:application/json;base64,", ""));
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
+const RARITY_NAMES = ["Common", "Rare", "Epic", "Legendary"] as const;
+const FACTION_NAMES = ["Castle", "Inferno", "Necropolis", "Dungeon"] as const;
 
 export default function PackOpening() {
   const { address, isConnected } = useAccount();
@@ -141,36 +129,55 @@ export default function PackOpening() {
     });
   }, [isLocalDev, lastRequestId, pull, vrfCoordinator, fulfillFiredFor, fulfillVrf]);
 
-  // Fetch tokenURI for each card in the pull so we can render name + image + rarity.
-  const tokenIds = useMemo(
-    () => (pull ? pull.cardIds.map((_, i) => pull.firstTokenId + BigInt(i)) : []),
-    [pull],
-  );
+  const uniquePullCardIds = useMemo(() => {
+    if (!pull) return [] as number[];
+    return Array.from(new Set(pull.cardIds.map(Number))).sort((a, b) => a - b);
+  }, [pull]);
 
-  const { data: tokenUris } = useReadContracts({
-    contracts: tokenIds.map((id) => ({
-      ...CONTRACTS.cardNFT,
-      functionName: "tokenURI" as const,
-      args: [id],
+  const { data: pullCardData } = useReadContracts({
+    contracts: uniquePullCardIds.map((cid) => ({
+      ...CONTRACTS.gameConfig,
+      functionName: "getCard" as const,
+      args: [BigInt(cid)],
     })),
-    query: { enabled: tokenIds.length > 0 },
+    query: { enabled: uniquePullCardIds.length > 0 },
   });
 
   const revealed = useMemo(() => {
     if (!pull) return [];
+    const metaMap = new Map<number, { name: string; rarity: number; faction: number; stats: CardStats }>();
+    if (pullCardData) {
+      uniquePullCardIds.forEach((cid, i) => {
+        const r = pullCardData[i];
+        if (r?.status !== "success") return;
+        const card = r.result as { name: string; stats: Record<string, bigint | number> };
+        const s = card.stats;
+        metaMap.set(cid, {
+          name: card.name,
+          rarity: Number(s.rarity),
+          faction: Number(s.faction),
+          stats: {
+            cardType: Number(s.cardType), attack: Number(s.attack), hp: Number(s.hp),
+            defense: Number(s.defense), initiative: Number(s.initiative), manaCost: Number(s.manaCost),
+            spellPower: Number(s.spellPower), duration: Number(s.duration),
+            successChance: Number(s.successChance), school: Number(s.school),
+          },
+        });
+      });
+    }
     return pull.cardIds.map((cardId, i) => {
-      const uri = tokenUris?.[i];
-      const meta =
-        uri?.status === "success" && typeof uri.result === "string" ? parseTokenUri(uri.result) : null;
+      const cid = Number(cardId);
+      const meta = metaMap.get(cid);
       return {
         tokenId: pull.firstTokenId + BigInt(i),
-        cardId,
-        meta,
-        rarity: meta?.attributes?.find((a) => a.trait_type === "Rarity")?.value as string | undefined,
-        faction: meta?.attributes?.find((a) => a.trait_type === "Faction")?.value as string | undefined,
+        cardId: cid,
+        name: meta?.name ?? `Card #${cid}`,
+        rarity: meta ? RARITY_NAMES[meta.rarity] : undefined,
+        faction: meta ? FACTION_NAMES[meta.faction] : undefined,
+        stats: meta?.stats,
       };
     });
-  }, [pull, tokenUris]);
+  }, [pull, pullCardData, uniquePullCardIds]);
 
   const selectedIndex = useMemo(
     () => TIERS.findIndex((tier) => tier.id === selectedTier.id),
@@ -275,17 +282,14 @@ export default function PackOpening() {
                 variant={index === 0 && pull.tier > 0 ? "carved" : "slate"}
               >
                 <div style={{ padding: "var(--space-3)", textAlign: "center" }}>
-                  {card.meta?.image ? (
-                    <img
-                      src={card.meta.image}
-                      alt={card.meta.name ?? `Card #${card.cardId}`}
-                      style={{ width: "100%", height: "auto", borderRadius: 4, marginBottom: 8 }}
-                    />
-                  ) : (
-                    <div className="page-kicker">Card {index + 1}</div>
-                  )}
+                  <CardImage
+                    cardId={card.cardId}
+                    stats={card.stats}
+                    alt={card.name}
+                    style={{ borderRadius: 4, marginBottom: 8 }}
+                  />
                   <strong style={{ color: "var(--color-parchment)", fontFamily: "var(--font-display)", fontSize: "var(--text-xl)", display: "block" }}>
-                    {card.meta?.name ?? `#${card.cardId.toString()}`}
+                    {card.name}
                   </strong>
                   <span className="msg-info" style={{ display: "block", marginTop: 4 }}>
                     Token #{card.tokenId.toString()}
