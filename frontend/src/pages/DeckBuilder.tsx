@@ -32,8 +32,8 @@ const RARITY_COLOR: Record<number, string> = {
 
 export default function DeckBuilder() {
   const { address, isConnected } = useAccount();
-  const { hero, hasHero } = useHero();
-  const { ownedCounts, cardMeta, cardImages, uniqueCardIds, isLoading } = useDeckBuilderData();
+  const { hero, hasHero, isLoading: heroLoading } = useHero();
+  const { ownedCounts, cardMeta, cardImages, uniqueCardIds, isLoading: cardsLoading } = useDeckBuilderData();
 
   const [slots, setSlots] = useState<(number | null)[]>(() => emptySlots());
   const [deckName, setDeckName] = useState("Main");
@@ -69,11 +69,14 @@ export default function DeckBuilder() {
       </div>
     );
   }
-  if (isLoading) {
+  if (heroLoading || !hero) {
+    return <div className="page page-shell"><h1 className="page-title">Deck Builder</h1><p className="msg-info">Loading hero...</p></div>;
+  }
+  if (cardsLoading) {
     return <div className="page page-shell"><h1 className="page-title">Deck Builder</h1><p className="msg-info">Loading cards...</p></div>;
   }
 
-  const archetype = hero?.archetype ?? 0;
+  const archetype = hero.archetype;
 
   function flashStatus(msg: string) {
     setStatusMsg(msg);
@@ -185,7 +188,7 @@ export default function DeckBuilder() {
           <h1 className="page-title" style={{ marginBottom: 0 }}>Deck Builder</h1>
         </div>
         <div className="db-hero-tag">
-          <span>{FACTIONS[hero!.faction]}</span> <span>·</span> <span>{ARCHETYPES[archetype]}</span> <span>·</span> <span>Lv {hero!.level}</span>
+          <span>{FACTIONS[hero.faction]}</span> <span>·</span> <span>{ARCHETYPES[archetype]}</span> <span>·</span> <span>Lv {hero.level}</span>
         </div>
         <ArcanaRibbon variant={validation.ok ? "blue" : "red"}>{validation.filled} / {DECK_SIZE}</ArcanaRibbon>
       </div>

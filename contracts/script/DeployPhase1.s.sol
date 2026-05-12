@@ -11,6 +11,8 @@ contract DeployPhase1 is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
+        string memory towerIpfsHash = "bafybeihcbr4qtm336tiz3w6fahrbz7apqag7cvthbjw3agacryamccru3y";
+        string memory barracksIpfsHash = "bafybeifv2zgk6dceytq4a4fp7mm3mot52bq72bu3ayoy2umoy52no3z6qm";
 
         vm.startBroadcast(deployerKey);
 
@@ -200,7 +202,7 @@ contract DeployPhase1 is Script {
             ammo: 0, manaCost: 3, size: 1, magicResistance: 100,
             schoolImmunity: 0, effectImmunity: 0,
             spellPower: 0, duration: 0, spellTargetType: 0, successChance: 0, school: 0
-        }), noAbilities, "bafybeifv2zgk6dceytq4a4fp7mm3mot52bq72bu3ayoy2umoy52no3z6qm");
+        }), noAbilities, towerIpfsHash);
 
         // 18: Barracks (Castle, Rare, stationary)
         config.addCard("Barracks", CardStats({
@@ -209,7 +211,7 @@ contract DeployPhase1 is Script {
             ammo: 0, manaCost: 5, size: 1, magicResistance: 100,
             schoolImmunity: 0, effectImmunity: 0,
             spellPower: 0, duration: 0, spellTargetType: 0, successChance: 0, school: 0
-        }), noAbilities, "bafybeifv2zgk6dceytq4a4fp7mm3mot52bq72bu3ayoy2umoy52no3z6qm");
+        }), noAbilities, barracksIpfsHash);
 
         // 19: Monastery (Castle, Legendary, stationary)
         config.addCard("Monastery", CardStats({

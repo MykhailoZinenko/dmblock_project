@@ -102,3 +102,16 @@
 - [ ] Status effects (SLOW, POISON, BURN, ROOTS, BLIND, FREEZE) — no immunity system
 - [ ] Balance pass with automated match simulations
 - [ ] Season leaderboard, ELO history chart, UI polish
+
+## Final Pre-Deploy Checklist: Real Network Randomness
+- [ ] Replace local/mock VRF assumptions with real Chainlink VRF v2.5 configuration before Base Sepolia or mainnet deployment.
+- [ ] Create and fund a Chainlink VRF v2.5 subscription for the target network.
+- [ ] Deploy `PackOpening` with the real VRF coordinator, key hash, and subscription ID.
+- [ ] Add the deployed `PackOpening` proxy as an authorized consumer in the Chainlink VRF subscription.
+- [ ] Verify pack opening end-to-end on the real network: buy pack → VRF request → VRF callback → cards minted/revealed.
+- [ ] Do not use custom contract randomness for production pack openings; local mock VRF is only for development.
+
+## Final Pre-Deploy Checklist: TWAP Automation
+- [ ] Decide later: choose how `update-twap.mjs` should run in production/testnet automation.
+- [ ] Options to evaluate later: cron job, GitHub Actions schedule, server worker, or cloud scheduled job.
+- [ ] Until then, `update-twap.mjs` remains a manual admin/ops script, not frontend UI.

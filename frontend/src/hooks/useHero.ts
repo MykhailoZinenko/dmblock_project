@@ -82,5 +82,13 @@ export function useHero() {
     refetchOptions();
   };
 
-  return { hero, heroId, hasHero, traits, traitOptions: options, refetchAll, isLoading: hasHero && !heroData };
+  const isLoading =
+    isConnected &&
+    (balance === undefined ||
+      (hasHero &&
+        (totalSupply === undefined ||
+          (allHeroIds.length > 0 && !owners) ||
+          (heroId !== undefined && !heroData))));
+
+  return { hero, heroId, hasHero, traits, traitOptions: options, refetchAll, isLoading };
 }
