@@ -9,13 +9,14 @@ import {
 } from '../game/constants';
 import { GameController } from '../game/GameController';
 import { canSpawn, executeSpawn } from '../game/actions/spawnUnit';
+import { canCast, executeCast, getSpellTargets } from '../game/actions/castSpell';
 import { getReachableHexes, canMove, executeMove } from '../game/actions/moveUnit';
 import {
   getAttackTargets, canAttack, executeAttack,
   getAutoWalkHex, getAutoWalkTargets,
 } from '../game/actions/attackUnit';
 import { getCard, isBuilding, isMelee } from '../game/cardRegistry';
-import { CardType } from '../game/types';
+import { CardType, SpellTargetType } from '../game/types';
 import type { UnitInstance, HexCoord } from '../game/types';
 import { CardPicker } from '../components/CardPicker';
 import { ArcanaPanel, ArcanaButton, ArcanaBar } from '../ui/components/index';
@@ -29,6 +30,7 @@ type TurnPhase =
 type UIMode =
   | { type: 'pick_card' }
   | { type: 'place_card'; cardId: number }
+  | { type: 'target_spell'; cardId: number }
   | { type: 'unit_turn' }
   | { type: 'unit_acted' }
   | { type: 'animating' };
@@ -212,6 +214,23 @@ export default function Battle() {
 
   const onCardSelect = useCallback((cardId: number) => {
     const card = getCard(cardId);
+    if (card.cardType === CardType.SPELL) {
+      const ctrl = ctrlRef.current;
+      const scene = sceneRef.current;
+      if (!ctrl || !scene) return;
+      const player = getActivePlayer();
+      if (ctrl.getState().players[player].mana < card.manaCost) return;
+
+      setUI({ type: 'target_spell', cardId });
+      uiRef.current = { type: 'target_spell', cardId };
+
+      const validHexes = getSpellTargets(ctrl.getState(), player, cardId);
+      const isHeal = cardId === 10;
+      const isArea = card.spellTargetType === SpellTargetType.AREA;
+      const hlType = isHeal ? 'ally' as const : isArea ? 'area' as const : 'enemy' as const;
+      scene.showSpellHighlights(validHexes, hlType);
+      return;
+    }
     if (card.cardType !== CardType.UNIT) return;
     const ctrl = ctrlRef.current;
     const scene = sceneRef.current;
@@ -234,6 +253,12 @@ export default function Battle() {
   }, [getActivePlayer]);
 
   const onCardCancel = useCallback(() => {
+    if (uiRef.current.type === 'target_spell') {
+      setUI({ type: 'unit_turn' });
+      uiRef.current = { type: 'unit_turn' };
+      showActiveUnitHL();
+      return;
+    }
     const p = phaseRef.current;
     if (p.type === 'priority') {
       setUI({ type: 'pick_card' });
@@ -267,6 +292,63 @@ export default function Battle() {
       const currentPhase = phaseRef.current;
 
       if (currentUI.type === 'animating') return;
+
+      // ── Cast spell ──
+      if (currentUI.type === 'target_spell') {
+        const player = getActivePlayer();
+        const spellCardId = currentUI.cardId;
+        if (!canCast(state, player, spellCardId, { col, row }).valid) return;
+
+        setUI({ type: 'animating' });
+        uiRef.current = { type: 'animating' };
+        scene.clearHighlights();
+
+        const result = executeCast(state, player, spellCardId, { col, row });
+        const targetHex = { col, row };
+
+        if (!result.success) {
+          scene.showFizzle(targetHex);
+          syncUI();
+          const cu = ctrl.getCurrentUnit();
+          if (cu) trackActivated(cu.uid);
+          ctrl.passActivation();
+          setTimeout(() => advanceTurn(), 400);
+          return;
+        }
+
+        scene.playSpellFx(spellCardId, targetHex, () => {
+          for (const a of result.affectedUnits) {
+            const u = state.units.find(x => x.uid === a.uid);
+            if (!u) continue;
+            if (a.healed !== undefined && a.healed > 0) {
+              scene.showHealNumber({ col: u.col, row: u.row }, a.healed);
+              scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
+            }
+            if (a.damage !== undefined && a.damage > 0) {
+              scene.showDamageNumber({ col: u.col, row: u.row }, a.damage, false);
+              scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
+            }
+            if (a.died) {
+              scene.playDeath(u.uid, () => {});
+            }
+            if (a.statusApplied) {
+              const statusLabel = a.statusApplied === 'slow' ? 'SLOWED'
+                : a.statusApplied === 'polymorph' ? 'POLYMORPHED'
+                : 'CURSED';
+              scene.showStatusText({ col: u.col, row: u.row }, statusLabel);
+              if (a.statusApplied === 'polymorph') {
+                scene.swapToSheep(u.uid);
+              }
+            }
+          }
+          syncUI();
+          const cu = ctrl.getCurrentUnit();
+          if (cu) trackActivated(cu.uid);
+          ctrl.passActivation();
+          setTimeout(() => advanceTurn(), 400);
+        });
+        return;
+      }
 
       // ── Place card ──
       if (currentUI.type === 'place_card') {
@@ -491,6 +573,13 @@ export default function Battle() {
       scene.createGrid();
       sceneRef.current = scene;
 
+      ctrl.on('effectExpired', (data: { uid: number }) => {
+        const unit = ctrl.getState().units.find(u => u.uid === data.uid);
+        if (unit && !unit.polymorphed) {
+          scene.restoreFromSheep(data.uid);
+        }
+      });
+
       const mid = hex2px((GRID_COLS - 1) / 2, (GRID_ROWS - 1) / 2);
       engine.camera.position.set(mid.x, mid.y);
       engine.camera.zoom = 0.9;
@@ -545,6 +634,7 @@ export default function Battle() {
   const activePlayer = getActivePlayer();
   const isPriority = phase.type === 'priority';
   const isPlacing = ui.type === 'place_card';
+  const isTargetingSpell = ui.type === 'target_spell';
   const isAnimating = ui.type === 'animating';
   const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating;
   const showPassBtn = phase.type === 'initiative' && (ui.type === 'unit_turn' || ui.type === 'unit_acted');
@@ -651,7 +741,7 @@ export default function Battle() {
       <CardPicker
         currentMana={mana[activePlayer]}
         onCardSelect={onCardSelect}
-        selectedCardId={isPlacing ? ui.cardId : null}
+        selectedCardId={isPlacing ? ui.cardId : isTargetingSpell ? ui.cardId : null}
         onCancel={onCardCancel}
         disabled={cardPickerDisabled}
       />
