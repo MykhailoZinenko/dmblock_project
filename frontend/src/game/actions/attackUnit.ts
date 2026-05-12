@@ -50,16 +50,7 @@ export function getAttackTargets(state: GameState, attackerUid: number): AttackT
   const targets: AttackTarget[] = [];
   const seenUids = new Set<number>();
 
-  if (isRanged(card) && attacker.ammo > 0) {
-    for (const unit of state.units) {
-      if (!unit.alive || unit.playerId === attacker.playerId) continue;
-      targets.push({ unitUid: unit.uid, type: 'ranged' });
-    }
-    return targets;
-  }
-
-  if (!isMelee(card)) return [];
-
+  // Adjacent melee targets (available to ALL non-building units)
   const adjCells = getAdjacentCells(attacker);
   for (const unit of state.units) {
     if (!unit.alive || unit.playerId === attacker.playerId || seenUids.has(unit.uid)) continue;
@@ -69,6 +60,14 @@ export function getAttackTargets(state: GameState, attackerUid: number): AttackT
         seenUids.add(unit.uid);
         break;
       }
+    }
+  }
+
+  // Ranged targets (only if ranged unit with ammo)
+  if (isRanged(card) && attacker.ammo > 0) {
+    for (const unit of state.units) {
+      if (!unit.alive || unit.playerId === attacker.playerId || seenUids.has(unit.uid)) continue;
+      targets.push({ unitUid: unit.uid, type: 'ranged' });
     }
   }
 
@@ -140,6 +139,9 @@ export function executeAttack(
     }
 
     attacker.ammo--;
+  } else if (attackType === 'melee' && isRanged(attackerCard)) {
+    // Ranged unit forced into melee — half damage
+    finalDamage = Math.max(1, Math.floor(finalDamage * 0.5));
   }
 
   const targetDied = applyDamage(state, targetUid, finalDamage);
