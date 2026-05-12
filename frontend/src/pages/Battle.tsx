@@ -272,6 +272,23 @@ export default function Battle() {
   const onPass = useCallback(() => {
     const ctrl = ctrlRef.current;
     if (!ctrl) return;
+
+    // Priority phase pass — mark priority used, advance
+    if (phaseRef.current.type === 'priority') {
+      const player = phaseRef.current.player;
+      const prev = prioRef.current;
+      const newPrio: PriorityState = {
+        ...prev,
+        p0Used: player === 0 ? true : prev.p0Used,
+        p1Used: player === 1 ? true : prev.p1Used,
+      };
+      setPriority(newPrio);
+      prioRef.current = newPrio;
+      sceneRef.current?.clearHighlights();
+      advanceTurn();
+      return;
+    }
+
     const cu = ctrl.getCurrentUnit();
     if (cu) trackActivated(cu.uid);
     ctrl.passActivation();
@@ -637,7 +654,8 @@ export default function Battle() {
   const isTargetingSpell = ui.type === 'target_spell';
   const isAnimating = ui.type === 'animating';
   const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating;
-  const showPassBtn = phase.type === 'initiative' && (ui.type === 'unit_turn' || ui.type === 'unit_acted');
+  const showPassBtn = (phase.type === 'initiative' && (ui.type === 'unit_turn' || ui.type === 'unit_acted'))
+    || (phase.type === 'priority' && ui.type === 'pick_card');
   const currentUnit = ctrlRef.current?.getCurrentUnit();
 
   let statusText = '';
