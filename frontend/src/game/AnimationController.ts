@@ -87,13 +87,13 @@ export class AnimationController {
     }
   }
 
-  async playAttack(direction: AttackDirection): Promise<void> {
+  async playAttack(direction: AttackDirection, targetIsLeft: boolean): Promise<void> {
     if (this.isBuildingUnit) return;
     const cfg = this.unitConfig;
     if (!cfg) return;
     const anim = getAttackAnim(cfg, direction);
     if (!anim) return;
-    await this.switchAnim(anim.state, false);
+    await this.switchAnim(anim.state, false, targetIsLeft);
     await this.waitForComplete();
     await this.playIdle();
   }
@@ -158,7 +158,7 @@ export class AnimationController {
     this.container.addChild(spr);
   }
 
-  private async switchAnim(state: AnimState, loop: boolean): Promise<void> {
+  private async switchAnim(state: AnimState, loop: boolean, forceFlipLeft?: boolean): Promise<void> {
     const cfg = this.unitConfig;
     if (!cfg) return;
 
@@ -187,7 +187,14 @@ export class AnimationController {
     const s = UNIT_TARGET_HEIGHT / anim.frameHeight;
     this.baseScale = s;
 
-    const shouldFlip = this.flipX && (anim.flipForLeft !== false);
+    // For attacks: flip based on target direction, not player side
+    // For idle/run: flip based on player side (P2 faces left)
+    let shouldFlip: boolean;
+    if (forceFlipLeft !== undefined) {
+      shouldFlip = forceFlipLeft;
+    } else {
+      shouldFlip = this.flipX && (anim.flipForLeft !== false);
+    }
     spr.scale.set(shouldFlip ? -s : s, s);
 
     spr.animationSpeed = 0.12;

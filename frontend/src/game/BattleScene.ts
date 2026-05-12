@@ -183,7 +183,11 @@ export class BattleScene {
     const targetPos = hex2px(targetHex.col, targetHex.row);
     const dx = targetPos.x - unitPos.x;
     const dy = targetPos.y - unitPos.y;
-    const angle = Math.atan2(-dy, dx) * (180 / Math.PI);
+    const targetIsLeft = dx < 0;
+
+    // Use abs(dx) so left/right are symmetric — direction is always
+    // computed as if attacking rightward, then flip handles left
+    const angle = Math.atan2(-dy, Math.abs(dx)) * (180 / Math.PI);
 
     let direction: AttackDirection;
     if (angle > 60) direction = 'top';
@@ -192,7 +196,7 @@ export class BattleScene {
     else if (angle > -60) direction = 'bottomright';
     else direction = 'bottom';
 
-    await entry.anim.playAttack(direction);
+    await entry.anim.playAttack(direction, targetIsLeft);
     onDone();
   }
 
