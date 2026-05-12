@@ -23,4 +23,6 @@ anvil = "http://127.0.0.1:8545"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 
 [etherscan]
+# Etherscan API v2 (chainid in URL) — v1 /api-sepolia.etherscan.io is deprecated for forge verify
+sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api.etherscan.io/v2/api?chainid=11155111" }
 base_sepolia = { key = "${BASESCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
