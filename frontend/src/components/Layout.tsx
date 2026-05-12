@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: "/hero", label: "Hero" },
   { to: "/decks", label: "Decks" },
   { to: "/marketplace", label: "Market" },
+  { to: "/packs", label: "Packs" },
   { to: "/tests", label: "Tests" },
 ];
 

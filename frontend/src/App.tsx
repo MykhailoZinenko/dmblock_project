@@ -5,6 +5,7 @@ import CreateHero from "./pages/CreateHero";
 import Collection from "./pages/Collection";
 import HeroProfile from "./pages/HeroProfile";
 import Marketplace from "./pages/Marketplace";
+import PackOpening from "./pages/PackOpening";
 import DeckBuilder from "./pages/DeckBuilder";
 import TestRunner from "./pages/TestRunner";
 import VisualIndex from "./pages/tests/VisualIndex";
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/collection" element={<Collection />} />
         <Route path="/hero" element={<HeroProfile />} />
         <Route path="/marketplace" element={<Marketplace />} />
+        <Route path="/packs" element={<PackOpening />} />
         <Route path="/decks" element={<DeckBuilder />} />
         <Route path="/tests" element={<TestRunner />} />
         <Route path="/tests/visual" element={<VisualIndex />} />
