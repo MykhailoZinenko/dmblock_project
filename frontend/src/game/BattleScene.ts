@@ -10,7 +10,7 @@ import { hex2px } from './hexUtils';
 import { getCard, isBuilding } from './cardRegistry';
 import { AnimatedSprite } from '../engine/nodes/AnimatedSprite';
 import { SpriteSheet } from '../engine/textures/SpriteSheet';
-import { arrowProjectile, spellFxConfigs } from './spriteConfig';
+import { arrowProjectile, spellFxConfigs, sheepSpriteConfig } from './spriteConfig';
 import type { UnitInstance, HexCoord } from './types';
 import {
   GRID_COLS, GRID_ROWS, HEX_SIZE,
@@ -442,6 +442,13 @@ export class BattleScene {
   }
 
   // ── Polymorph Visuals ────────────────────────────────
+
+  async preloadSheep(): Promise<void> {
+    const anim = sheepSpriteConfig.anims.find(a => a.state === 'idle');
+    if (anim) {
+      await this.engine.textures.load('sheep_idle', `${sheepSpriteConfig.basePath}/${anim.file}`);
+    }
+  }
 
   swapToSheep(uid: number): void {
     const entry = this.units.get(uid);

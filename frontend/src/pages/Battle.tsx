@@ -599,6 +599,7 @@ export default function Battle() {
 
       const scene = new BattleScene(engine);
       scene.createGrid();
+      await scene.preloadSheep();
       sceneRef.current = scene;
 
       ctrl.on('effectExpired', (data: { uid: number }) => {
