@@ -31,6 +31,8 @@ import { ConnectionManager } from '../multiplayer/ConnectionManager';
 import { MatchManager } from '../multiplayer/MatchManager';
 import { listDecks } from '../lib/deckStorage';
 import { DECK_SIZE } from '../lib/deckValidation';
+import { hashState } from '../game/stateHash';
+import type { GameAction } from '../multiplayer/protocol';
 
 // ─── Turn phase ────────────────────────────────────────
 type TurnPhase =
@@ -68,6 +70,18 @@ export default function Battle() {
   const matchRef = useRef<MatchManager | null>(null);
   const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
   const isMultiplayer = duelId !== null;
+
+  const sendAction = useCallback((action: GameAction) => {
+    const conn = connRef.current;
+    const ctrl = ctrlRef.current;
+    if (!isMultiplayer || !conn) return;
+    conn.send({ type: 'action', action });
+    conn.sendToServer({ type: 'action', action });
+    if (ctrl) {
+      const h = hashState(ctrl.getState());
+      conn.send({ type: 'state-hash', hash: h });
+    }
+  }, [isMultiplayer]);
 
   const [phase, setPhase] = useState<TurnPhase>({ type: 'priority', player: 0 });
   const [ui, setUI] = useState<UIMode>({ type: 'pick_card' });
@@ -368,10 +382,11 @@ export default function Battle() {
     const cu = ctrl.getCurrentUnit();
     if (cu) trackActivated(cu.uid);
     ctrl.passActivation();
+    sendAction({ type: 'pass' });
     sceneRef.current?.clearHighlights();
     resetTimer();
     advanceTurn();
-  }, [advanceTurn, trackActivated, resetTimer]);
+  }, [advanceTurn, trackActivated, resetTimer, sendAction]);
 
   // ─── Hex click handler ──────────────────────────────
   useEffect(() => {
@@ -399,6 +414,7 @@ export default function Battle() {
         scene.clearHighlights();
 
         const result = executeCast(state, player, spellCardId, { col, row });
+        sendAction({ type: 'cast', playerId: player, cardId: spellCardId, col, row });
         const targetHex = { col, row };
 
         const finishSpellCast = () => {
@@ -470,6 +486,7 @@ export default function Battle() {
 
         const unit = executeSpawn(state, player, currentUI.cardId, { col, row });
         scene.spawnUnit(unit);
+        sendAction({ type: 'spawn', playerId: player, cardId: currentUI.cardId, col, row });
 
         if (currentPhase.type === 'priority') {
           ctrl.rebuildQueue();
@@ -584,6 +601,7 @@ export default function Battle() {
           scene.clearHighlights();
 
           const attackResult = executeAttack(state, cu.uid, targetUnit.uid);
+          sendAction({ type: 'attack', attackerUid: cu.uid, targetUid: targetUnit.uid });
           scene.updateHpBar(targetUnit.uid, targetUnit.currentHp, targetUnit.maxHp);
 
           if (attackResult.attackType === 'ranged') {
@@ -626,8 +644,10 @@ export default function Battle() {
             scene.clearHighlights();
 
             const path = executeMove(state, cu.uid, walkHex);
+            sendAction({ type: 'move', unitUid: cu.uid, col: walkHex.col, row: walkHex.row });
             scene.moveUnit(cu.uid, path, () => {
               const attackResult = executeAttack(state, cu.uid, targetUnit.uid);
+              sendAction({ type: 'attack', attackerUid: cu.uid, targetUid: targetUnit.uid });
               scene.updateHpBar(targetUnit.uid, targetUnit.currentHp, targetUnit.maxHp);
 
               scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
@@ -649,6 +669,7 @@ export default function Battle() {
       scene.clearHighlights();
 
       const path = executeMove(state, cu.uid, { col, row });
+      sendAction({ type: 'move', unitUid: cu.uid, col, row });
       scene.moveUnit(cu.uid, path, () => {
         setUI({ type: 'unit_turn' });
         uiRef.current = { type: 'unit_turn' };
@@ -699,6 +720,7 @@ export default function Battle() {
         scene.clearHighlights();
 
         const result = executeCast(state, player, spellCardId, heroHex);
+        sendAction({ type: 'cast', playerId: player, cardId: spellCardId, col: heroHex.col, row: heroHex.row });
 
         const finishSpellOnHero = () => {
           checkBarrierChange();
@@ -750,6 +772,7 @@ export default function Battle() {
       scene.clearHighlights();
 
       const heroResult = executeHeroAttack(state, cu.uid, enemyPid);
+      sendAction({ type: 'attack-hero', attackerUid: cu.uid, targetPlayerId: enemyPid });
       scene.showHeroDamage(enemyPid, heroResult.damage, heroResult.isCrit);
       syncUI();
       resetTimer();
@@ -932,17 +955,57 @@ export default function Battle() {
       const { opponentDeck } = await match.exchangeDecks(myDeckIds);
       match.startGame(duelId, ctrl);
 
-      match.on('opponent-action', () => {
-        syncUI();
+      match.on('opponent-action', (action: GameAction) => {
         const scene = sceneRef.current;
         const state = ctrl.getState();
-        if (scene) {
-          for (const u of state.units) {
-            if (u.alive) scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
+        if (!scene) { syncUI(); return; }
+
+        switch (action.type) {
+          case 'spawn': {
+            const unit = state.units.find(u =>
+              u.alive && u.col === action.col && u.row === action.row,
+            );
+            if (unit) scene.spawnUnit(unit);
+            break;
           }
-          scene.updateHeroHp(0, state.players[0].heroHp, HERO_HP);
-          scene.updateHeroHp(1, state.players[1].heroHp, HERO_HP);
+          case 'move': {
+            scene.moveUnit(action.unitUid, [{ col: action.col, row: action.row }], () => {});
+            break;
+          }
+          case 'attack': {
+            const target = state.units.find(u => u.uid === action.targetUid);
+            const attacker = state.units.find(u => u.uid === action.attackerUid);
+            if (target) {
+              scene.updateHpBar(target.uid, target.currentHp, target.maxHp);
+              if (!target.alive) scene.playDeath(target.uid, () => {});
+            }
+            if (attacker) {
+              scene.updateHpBar(attacker.uid, attacker.currentHp, attacker.maxHp);
+              if (!attacker.alive) scene.playDeath(attacker.uid, () => {});
+            }
+            break;
+          }
+          case 'attack-hero': {
+            const p = state.players[action.targetPlayerId];
+            scene.updateHeroHp(action.targetPlayerId, p.heroHp, HERO_HP);
+            break;
+          }
+          case 'cast': {
+            for (const u of state.units) {
+              if (u.alive) scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
+              else scene.playDeath(u.uid, () => {});
+            }
+            scene.updateHeroHp(0, state.players[0].heroHp, HERO_HP);
+            scene.updateHeroHp(1, state.players[1].heroHp, HERO_HP);
+            break;
+          }
+          default:
+            break;
         }
+
+        checkBarrierChange();
+        syncUI();
+        handleWinCheck();
       });
 
       match.on('game-over', (winner: number | null) => {
