@@ -135,7 +135,7 @@ describe('executeCast', () => {
 });
 
 describe('tickStatusEffects', () => {
-  it('removes expired effects and restores stats', () => {
+  it('removes expired effects and restores stats after full duration', () => {
     const state = createGameState(100);
     const enemy = executeSpawn(state, 1, 5, { col: 14, row: 0 });
     const origAtk = enemy.attack;
@@ -143,8 +143,13 @@ describe('tickStatusEffects', () => {
     const result = executeCast(state, 0, 15, { col: 14, row: 0 });
     if (result.success) {
       expect(enemy.polymorphed).toBe(true);
-      const expired = tickStatusEffects(state);
-      expect(expired).toContain(enemy.uid);
+      // First tick: current turn ends, effect survives (turnsRemaining goes from 2 to 1)
+      const expired1 = tickStatusEffects(state);
+      expect(expired1).toHaveLength(0);
+      expect(enemy.polymorphed).toBe(true);
+      // Second tick: effect expires
+      const expired2 = tickStatusEffects(state);
+      expect(expired2).toContain(enemy.uid);
       expect(enemy.polymorphed).toBe(false);
       expect(enemy.attack).toBe(origAtk);
       expect(enemy.activeEffects).toHaveLength(0);

@@ -100,7 +100,8 @@ function applyStatus(
 ): void {
   const original = { attack: unit.attack, defense: unit.defense, speed: unit.speed };
 
-  const effect: ActiveEffect = { cardId, type, turnsRemaining: duration, originalStats: original };
+  // +1 so the effect survives the rest of the current turn and lasts `duration` full turns
+  const effect: ActiveEffect = { cardId, type, turnsRemaining: duration + 1, originalStats: original };
   unit.activeEffects.push(effect);
 
   if (type === 'slow') {
