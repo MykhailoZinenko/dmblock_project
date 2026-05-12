@@ -4,8 +4,8 @@
 
 ## Battle System Progress
 
-### Game Logic Complete (319 tests, >99% coverage)
-- **types.ts** — CardDefinition, UnitInstance, PlayerState, BoardCell, DamageType, AbilityDefinition, TerrainEffect
+### Game Logic Complete (325 tests, >99% coverage)
+- **types.ts** — CardDefinition, UnitInstance, PlayerState, BoardCell, DamageType, AbilityDefinition
 - **cardRegistry.ts** — 20 cards: stats, abilities, damageType, powerMultiplier, spriteKeys, fxKeys
 - **hexUtils.ts** — Pointy-top odd-r: hex2px, px2hex, distance, neighbors, rings, direction
 - **pathfinding.ts** — BFS findReachable + findPath with obstacle blocking
@@ -17,20 +17,27 @@
 - **spawnUnit.ts** — Deploy zone validation, 2×2 buildings, Peasant unarmed 20%
 - **moveUnit.ts** — Reachable hexes, AP cost, board updates
 - **combat.ts** — Damage formula (atk-def, MR, Inferno bypass buildings, crit)
-- **attackUnit.ts** — Melee (adjacent, retaliation) + Ranged (enemy half ×0.5, melee block ×0.5, ammo, Marksman bypass)
+- **attackUnit.ts** — Melee (adjacent, retaliation) + Ranged (enemy half ×0.5, melee block ×0.5, ammo, Marksman bypass) + **getAutoWalkHex/getAutoWalkTargets** for click-to-attack
 - **spriteConfig.ts** — Animation definitions for all 20 cards + FX + polymorph sheep
 
-### Battle UI (Battle.tsx) — Functional but buggy
-- 15×11 hex grid, deploy zones, card picker, initiative queue display
-- Priority turn system (zero-unit players get 1 free spawn)
-- Unit spawning, movement (green highlights), attack (red highlights)
-- Floating damage numbers, death sprite removal
+### Battle Rendering (New Architecture)
+- **AnimationController.ts** — Per-unit animation state machine: idle/run/attack/death transitions, texture caching, direction picking, fade
+- **BattleScene.ts** — Engine-side manager: grid, unit sprites, HP bars, highlights (green move, red direct attack, orange auto-walk), smooth movement tweens, damage numbers, projectile animation, death animation + fade
+- **Battle.tsx** — React HUD (Arcana components) + input bridge, click-to-attack with directional auto-walk, auto-end activation when AP exhausted
 
-### Known Bugs — Fix First
-1. **Movement animation** — jumps cell-to-cell, not smooth continuous path
-2. **Damage values** — feel wrong, verify against GDD formulas
-3. **No run/attack/death animations** — only idle plays, animation state machine not wired
-4. **Sprite sizing inconsistencies**
+### Battle UI Features
+- 15×11 hex grid with deploy zones
+- Card picker (hand-styled cards with faction/rarity/stats)
+- Arcana HUD: slate top bar (turn/status/mana bars), wood initiative sidebar, styled action buttons
+- Priority turn system (zero-unit players get 1 free spawn)
+- Unit spawning with idle animation + HP bar
+- Smooth continuous movement (run animation, 300px/sec)
+- Click-to-attack: melee auto-walk to nearest adjacent hex (cursor-directed), ranged shoot + projectile
+- Directional attack animations (top/topright/side/bottomright/bottom with fallback chain)
+- Death animation → fade out → removal
+- Floating damage numbers (with crit display)
+- Auto-end activation when AP exhausted (0.4s delay)
+- HP bars with color coding (green > yellow > red)
 
 ### Not Yet Wired to UI
 - Spell casting (logic exists in plan, UI not connected)
@@ -49,28 +56,28 @@
 - Phase 7 ✓ — DuelManager + FreedomRecord contracts
 
 ## Key Decisions This Session
-- Factions replace spell schools (Castle/Inferno/Necropolis/Dungeon)
-- Barracks + Monastery size 2×2
-- Inferno units deal magic damage → converts to physical vs buildings
-- Mine Mode rework: 2 decoys + real (not invisibility)
-- HeroTypes.sol: 17 traits (removed tactical, added faction magic 10-13)
-- Priority spawn: 1 per player per global turn, spawned units enter queue next turn
-- GameController.passActivation doesn't auto-endTurn — Battle.tsx drives via isQueueExhausted()
-- Spells don't count as persistent units (not tracked in spawnedThisTurn)
-- Passive abilities activate on spawn immediately
+- Battle.tsx refactored from 640-line monolith into 3 layers: AnimationController + BattleScene + Battle.tsx
+- Attack costs 1 AP, ends activation (move freely + 1 attack, attack ends all movement)
+- Click-to-attack auto-walk: cursor position determines approach direction (nearest adjacent hex to click)
+- Damage formula (atk-def, min 1) kept per GDD — hero attack multiplier will scale effective attack later
+- Arcana UI components (ArcanaPanel, ArcanaButton, ArcanaBar) used for battle HUD
+- Sprite sizing normalized: UNIT_TARGET_HEIGHT = HEX_SIZE * 1.6, buildings 2.0/2.8
 
 ## Architecture
 - `frontend/src/game/` — pure TS logic, deterministic, no rendering
-- `frontend/src/pages/Battle.tsx` — React bridge to WebGPU engine
+- `frontend/src/game/AnimationController.ts` — per-unit sprite animation state machine
+- `frontend/src/game/BattleScene.ts` — engine-side scene manager
+- `frontend/src/pages/Battle.tsx` — React HUD bridge + input handling
 - `frontend/src/engine/` — WebGPU primitives (untouched)
 - Battle.tsx drives turn flow: advanceTurn() → priority → initiative → endTurn
 
-## Plan File
-`docs/superpowers/plans/2026-05-12-battle-system.md`
+## Plan Files
+- `docs/superpowers/specs/2026-05-12-battle-polish-design.md`
+- `docs/superpowers/plans/2026-05-12-battle-polish.md`
 
 ## Commands
 ```bash
 cd contracts && forge test                              # 130 tests
 cd frontend && npm run dev                              # localhost:5173/battle
-cd frontend && npx vitest run src/game/__tests__/       # 319 tests
+cd frontend && npx vitest run src/game/__tests__/       # 325 tests
 ```
