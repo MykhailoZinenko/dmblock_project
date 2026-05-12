@@ -382,4 +382,16 @@ contract DuelManagerTest is Test {
         assertEq(dm.minimumBet(), 0.01 ether);
         assertEq(dm.treasury(), address(99));
     }
+
+    // --- Duel Count ---
+
+    function test_DuelCount() public {
+        assertEq(dm.duelCount(), 0);
+        vm.prank(player1);
+        dm.createDuel{value: 1 ether}();
+        assertEq(dm.duelCount(), 1);
+        vm.prank(player2);
+        dm.createDuel{value: 1 ether}();
+        assertEq(dm.duelCount(), 2);
+    }
 }

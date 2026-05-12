@@ -268,4 +268,8 @@ contract DuelManager is OwnableUpgradeable, ReentrancyGuard, IDuelManager {
     function seasonId() external view returns (uint32) {
         return _getStorage().seasonId;
     }
+
+    function duelCount() external view returns (uint256) {
+        return _getStorage().duelCount;
+    }
 }
