@@ -8,7 +8,9 @@ import { Text } from '../engine/nodes/Text';
 import { AnimationController, getAttackDirection, type AttackDirection } from './AnimationController';
 import { hex2px } from './hexUtils';
 import { getCard, isBuilding } from './cardRegistry';
-import { arrowProjectile } from './spriteConfig';
+import { AnimatedSprite } from '../engine/nodes/AnimatedSprite';
+import { SpriteSheet } from '../engine/textures/SpriteSheet';
+import { arrowProjectile, spellFxConfigs } from './spriteConfig';
 import type { UnitInstance, HexCoord } from './types';
 import {
   GRID_COLS, GRID_ROWS, HEX_SIZE,
@@ -344,6 +346,113 @@ export class BattleScene {
       }
     };
     this.engine.ticker.add(tick);
+  }
+
+  // ── Spell FX ─────────────────────────────────────────
+
+  async playSpellFx(cardId: number, targetHex: HexCoord, onDone: () => void): Promise<void> {
+    const fxCfg = spellFxConfigs[cardId];
+    if (!fxCfg) { onDone(); return; }
+
+    const pos = hex2px(targetHex.col, targetHex.row);
+    const tex = await this.engine.textures.load(`spell_fx_${cardId}`, fxCfg.file);
+    const frames = SpriteSheet.fromStrip(tex, fxCfg.frameWidth);
+    const spr = new AnimatedSprite(frames);
+    spr.anchor.set(0.5, 0.75);
+    const s = (HEX_SIZE * 2) / fxCfg.frameHeight;
+    spr.scale.set(s, s);
+    spr.position.set(pos.x, pos.y);
+    spr.animationSpeed = 0.15;
+    spr.loop = false;
+    this.unitLayer.addChild(spr);
+    spr.gotoAndPlay(0);
+    spr.onComplete = () => {
+      this.unitLayer.removeChild(spr);
+      onDone();
+    };
+  }
+
+  showHealNumber(hex: HexCoord, amount: number): void {
+    const pos = hex2px(hex.col, hex.row);
+    const txt = new Text(`+${amount}`, { fontSize: 22, fill: 0x2ecc71 });
+    txt.position.set(pos.x - 15, pos.y - HEX_SIZE * 1.2);
+    this.unitLayer.addChild(txt);
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      txt.position.y -= 40 * dt;
+      txt.alpha = Math.max(0, 1 - t);
+      if (t > 1) {
+        this.engine.ticker.remove(fn);
+        this.unitLayer.removeChild(txt);
+      }
+    };
+    this.engine.ticker.add(fn);
+  }
+
+  showStatusText(hex: HexCoord, text: string): void {
+    const pos = hex2px(hex.col, hex.row);
+    const txt = new Text(text, { fontSize: 18, fill: 0x9b59b6 });
+    txt.position.set(pos.x - 30, pos.y - HEX_SIZE * 1.5);
+    this.unitLayer.addChild(txt);
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      txt.position.y -= 30 * dt;
+      txt.alpha = Math.max(0, 1 - t * 0.7);
+      if (t > 1.4) {
+        this.engine.ticker.remove(fn);
+        this.unitLayer.removeChild(txt);
+      }
+    };
+    this.engine.ticker.add(fn);
+  }
+
+  showFizzle(hex: HexCoord): void {
+    const pos = hex2px(hex.col, hex.row);
+    const txt = new Text('FIZZLE!', { fontSize: 24, fill: 0xf1c40f });
+    txt.position.set(pos.x - 30, pos.y - HEX_SIZE * 1.2);
+    this.unitLayer.addChild(txt);
+    let t = 0;
+    const fn = (dt: number) => {
+      t += dt;
+      txt.position.y -= 30 * dt;
+      txt.alpha = Math.max(0, 1 - t * 0.8);
+      if (t > 1.2) {
+        this.engine.ticker.remove(fn);
+        this.unitLayer.removeChild(txt);
+      }
+    };
+    this.engine.ticker.add(fn);
+  }
+
+  showSpellHighlights(validHexes: HexCoord[], highlightType: 'enemy' | 'ally' | 'area'): void {
+    this.hlGfx.clear();
+    const color = highlightType === 'ally' ? 0x2ecc71
+      : highlightType === 'area' ? 0xe67e22
+      : 0x9b59b6;
+    for (const h of validHexes) {
+      const p = hex2px(h.col, h.row);
+      this.hlGfx.lineStyle(2, color);
+      this.hlGfx.beginFill(color, 0.15);
+      this.hlGfx.drawRegularPolygon(p.x, p.y, HEX_SIZE - 2, 6);
+      this.hlGfx.endFill();
+    }
+    this.hlGfx.visible = true;
+  }
+
+  // ── Polymorph Visuals ────────────────────────────────
+
+  swapToSheep(uid: number): void {
+    const entry = this.units.get(uid);
+    if (!entry) return;
+    entry.anim.swapToSheep();
+  }
+
+  restoreFromSheep(uid: number): void {
+    const entry = this.units.get(uid);
+    if (!entry) return;
+    entry.anim.restoreFromSheep();
   }
 
   // ── Cleanup ──────────────────────────────────────────
