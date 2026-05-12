@@ -1,7 +1,8 @@
-import { createGameState, GameState } from './GameState';
+import { createGameState } from './GameState';
+import type { GameState } from './GameState';
 import { buildInitiativeQueue } from './initiative';
 import { MANA_PER_TURN, MANA_CAP } from './constants';
-import { UnitInstance, GamePhase } from './types';
+import type { UnitInstance, GamePhase } from './types';
 
 export type GameEvent =
   | 'turnStart'
@@ -89,16 +90,17 @@ export class GameController {
     this.emit('activationEnd', { unit: currentUnit });
 
     this.state.currentActivationIndex++;
-
-    if (this.state.currentActivationIndex >= this.state.activationQueue.length) {
-      this.endTurn();
-      return;
-    }
-
     this.emit('stateChange', this.state);
-    this.emit('activationStart', {
-      unit: this.state.activationQueue[this.state.currentActivationIndex],
-    });
+
+    if (this.state.currentActivationIndex < this.state.activationQueue.length) {
+      this.emit('activationStart', {
+        unit: this.state.activationQueue[this.state.currentActivationIndex],
+      });
+    }
+  }
+
+  isQueueExhausted(): boolean {
+    return this.state.currentActivationIndex >= this.state.activationQueue.length;
   }
 
   endTurn(): void {

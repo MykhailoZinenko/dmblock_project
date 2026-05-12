@@ -1,32 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GameController } from '../GameController';
-import { DamageType, UnitInstance } from '../types';
+import { DamageType } from '../types';
+import type { UnitInstance } from '../types';
 import { STARTING_MANA, MANA_PER_TURN, MANA_CAP } from '../constants';
 
 function makeUnit(overrides: Partial<UnitInstance> & { uid: number; playerId: number }): UnitInstance {
   return {
-    cardId: 1,
-    col: 0,
-    row: 0,
-    currentHp: 10,
-    maxHp: 10,
-    attack: 5,
-    defense: 3,
-    initiative: 10,
-    speed: 3,
-    ammo: 0,
-    magicResistance: 0,
+    cardId: 1, col: 0, row: 0,
+    currentHp: 10, maxHp: 10, attack: 5, defense: 3,
+    initiative: 10, speed: 3, ammo: 0, magicResistance: 0,
     damageType: DamageType.PHYSICAL,
-    remainingAp: 3,
-    retaliatedThisTurn: false,
-    alive: true,
-    cooldowns: {},
-    garrisonedIn: null,
-    polymorphed: false,
-    cursed: false,
+    remainingAp: 3, retaliatedThisTurn: false, alive: true,
+    cooldowns: {}, garrisonedIn: null, polymorphed: false, cursed: false,
     occupiedCells: [],
     ...overrides,
   };
+}
+
+function passAll(ctrl: GameController) {
+  while (!ctrl.isQueueExhausted()) {
+    ctrl.passActivation();
+  }
+  ctrl.endTurn();
 }
 
 describe('GameController', () => {
@@ -78,33 +73,24 @@ describe('GameController', () => {
     beforeEach(() => {
       ctrl.startGame(42);
       const state = ctrl.getState();
-
-      // Unit A: initiative 20 (highest), player 0
       unitA = makeUnit({ uid: 1, playerId: 0, initiative: 20, speed: 5 });
-      // Unit B: initiative 15, player 1
       unitB = makeUnit({ uid: 2, playerId: 1, initiative: 15, speed: 4 });
-      // Unit C: initiative 10, player 0
       unitC = makeUnit({ uid: 3, playerId: 0, initiative: 10, speed: 3 });
-
       state.units.push(unitA, unitB, unitC);
       ctrl.rebuildQueue();
     });
 
     it('getCurrentUnit returns highest initiative unit', () => {
-      const current = ctrl.getCurrentUnit();
-      expect(current).not.toBeNull();
-      expect(current!.uid).toBe(unitA.uid);
+      expect(ctrl.getCurrentUnit()!.uid).toBe(unitA.uid);
     });
 
     it('getControllingPlayer returns correct player ID', () => {
-      expect(ctrl.getControllingPlayer()).toBe(0); // unitA is player 0
+      expect(ctrl.getControllingPlayer()).toBe(0);
     });
 
     it('passActivation advances to next unit', () => {
       ctrl.passActivation();
-      const current = ctrl.getCurrentUnit();
-      expect(current).not.toBeNull();
-      expect(current!.uid).toBe(unitB.uid);
+      expect(ctrl.getCurrentUnit()!.uid).toBe(unitB.uid);
       expect(ctrl.getControllingPlayer()).toBe(1);
     });
 
@@ -113,9 +99,7 @@ describe('GameController', () => {
       const startCb = vi.fn();
       ctrl.on('activationEnd', endCb);
       ctrl.on('activationStart', startCb);
-
       ctrl.passActivation();
-
       expect(endCb).toHaveBeenCalledTimes(1);
       expect(startCb).toHaveBeenCalledTimes(1);
     });
@@ -127,34 +111,31 @@ describe('GameController', () => {
       expect(cb).toHaveBeenCalled();
     });
 
-    it('passActivation on last unit triggers endTurn', () => {
-      const turnEndCb = vi.fn();
-      const turnStartCb = vi.fn();
-      ctrl.on('turnEnd', turnEndCb);
-      ctrl.on('turnStart', turnStartCb);
+    it('isQueueExhausted is false during activations, true after all pass', () => {
+      expect(ctrl.isQueueExhausted()).toBe(false);
+      ctrl.passActivation();
+      expect(ctrl.isQueueExhausted()).toBe(false);
+      ctrl.passActivation();
+      expect(ctrl.isQueueExhausted()).toBe(false);
+      ctrl.passActivation();
+      expect(ctrl.isQueueExhausted()).toBe(true);
+    });
 
-      // Pass all three units
-      ctrl.passActivation(); // A -> B
-      ctrl.passActivation(); // B -> C
-      ctrl.passActivation(); // C -> end of turn
-
-      expect(turnEndCb).toHaveBeenCalledTimes(1);
-      expect(turnStartCb).toHaveBeenCalledTimes(1);
-      expect(ctrl.getTurnNumber()).toBe(2);
+    it('passActivation on last unit does not auto-call endTurn', () => {
+      ctrl.passActivation();
+      ctrl.passActivation();
+      ctrl.passActivation();
+      expect(ctrl.isQueueExhausted()).toBe(true);
+      expect(ctrl.getTurnNumber()).toBe(1);
     });
 
     it('endTurn increments turnNumber', () => {
-      // Pass all to trigger endTurn
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
+      passAll(ctrl);
       expect(ctrl.getTurnNumber()).toBe(2);
     });
 
     it('endTurn increments mana for both players', () => {
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
+      passAll(ctrl);
       const state = ctrl.getState();
       expect(state.players[0].mana).toBe(STARTING_MANA + MANA_PER_TURN);
       expect(state.players[1].mana).toBe(STARTING_MANA + MANA_PER_TURN);
@@ -164,12 +145,7 @@ describe('GameController', () => {
       const state = ctrl.getState();
       state.players[0].mana = MANA_CAP;
       state.players[1].mana = MANA_CAP - 1;
-
-      // Trigger endTurn
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
-
+      passAll(ctrl);
       expect(state.players[0].mana).toBe(MANA_CAP);
       expect(state.players[1].mana).toBe(MANA_CAP);
     });
@@ -180,12 +156,7 @@ describe('GameController', () => {
       state.units[0].retaliatedThisTurn = true;
       state.units[1].remainingAp = 0;
       state.units[1].retaliatedThisTurn = true;
-
-      // Trigger endTurn
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
-
+      passAll(ctrl);
       for (const unit of state.units) {
         if (unit.alive) {
           expect(unit.remainingAp).toBe(unit.speed);
@@ -195,46 +166,27 @@ describe('GameController', () => {
     });
 
     it('endTurn rebuilds initiative queue and resets activation index', () => {
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
-
+      passAll(ctrl);
       const state = ctrl.getState();
       expect(state.currentActivationIndex).toBe(0);
       expect(state.activationQueue.length).toBe(3);
-      // First in queue should still be highest initiative
       expect(state.activationQueue[0].uid).toBe(unitA.uid);
     });
 
     it('multiple turns cycle correctly', () => {
-      // Turn 1
       expect(ctrl.getTurnNumber()).toBe(1);
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
-
-      // Turn 2
+      passAll(ctrl);
       expect(ctrl.getTurnNumber()).toBe(2);
-      ctrl.passActivation();
-      ctrl.passActivation();
-      ctrl.passActivation();
-
-      // Turn 3
+      passAll(ctrl);
       expect(ctrl.getTurnNumber()).toBe(3);
       const state = ctrl.getState();
       expect(state.players[0].mana).toBe(STARTING_MANA + 2 * MANA_PER_TURN);
     });
 
     it('dead units are excluded from queue on rebuild', () => {
-      const state = ctrl.getState();
       unitB.alive = false;
-
-      // Current queue still has 3 (built before death), pass all to trigger endTurn + rebuild
-      ctrl.passActivation(); // A -> B
-      ctrl.passActivation(); // B -> C
-      ctrl.passActivation(); // C -> endTurn rebuilds queue
-
-      // After rebuild, queue should only have 2 alive units
+      passAll(ctrl);
+      const state = ctrl.getState();
       expect(state.activationQueue.length).toBe(2);
       expect(state.activationQueue.find(u => u.uid === unitB.uid)).toBeUndefined();
     });
@@ -246,18 +198,13 @@ describe('GameController', () => {
       ctrl.on('turnStart', cb);
       ctrl.startGame(42);
       expect(cb).toHaveBeenCalledTimes(1);
-
       ctrl.off('turnStart', cb);
-      // Trigger another turnStart by ending turn (no units, so passActivation won't work)
-      // Just call startGame again to get turnStart
       ctrl.startGame(99);
-      // cb should not be called again
       expect(cb).toHaveBeenCalledTimes(1);
     });
 
     it('off on unregistered event does not throw', () => {
-      const cb = vi.fn();
-      expect(() => ctrl.off('gameOver', cb)).not.toThrow();
+      expect(() => ctrl.off('gameOver', vi.fn())).not.toThrow();
     });
 
     it('multiple listeners on same event all fire', () => {
@@ -274,7 +221,6 @@ describe('GameController', () => {
       ctrl.startGame(42);
       const state = ctrl.getState();
       state.units.push(makeUnit({ uid: 1, playerId: 0, initiative: 10, speed: 3 }));
-
       const cb = vi.fn();
       ctrl.on('activationStart', cb);
       ctrl.rebuildQueue();
@@ -282,23 +228,23 @@ describe('GameController', () => {
     });
   });
 
-  describe('getControllingPlayer edge cases', () => {
-    it('returns -1 when no units', () => {
+  describe('edge cases', () => {
+    it('getControllingPlayer returns -1 when no units', () => {
       ctrl.startGame(42);
       expect(ctrl.getControllingPlayer()).toBe(-1);
     });
-  });
 
-  describe('no units passActivation', () => {
-    it('passActivation with no units does nothing harmful', () => {
+    it('passActivation with no units does nothing', () => {
       ctrl.startGame(42);
-      // Should not throw
       expect(() => ctrl.passActivation()).not.toThrow();
     });
-  });
 
-  describe('getState returns the internal state', () => {
-    it('returns the game state object', () => {
+    it('isQueueExhausted is true when no units', () => {
+      ctrl.startGame(42);
+      expect(ctrl.isQueueExhausted()).toBe(true);
+    });
+
+    it('getState returns the internal state', () => {
       ctrl.startGame(42);
       const state = ctrl.getState();
       expect(state).toBeDefined();

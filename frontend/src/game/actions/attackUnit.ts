@@ -1,53 +1,68 @@
 import type { GameState } from '../GameState';
 import type { UnitInstance } from '../types';
-import { getCard, isBuilding, isMelee } from '../cardRegistry';
-import { hexNeighbors } from '../hexUtils';
+import { getCard, isBuilding, isMelee, isRanged, hasAbility } from '../cardRegistry';
+import { hexNeighbors, hexDistance } from '../hexUtils';
 import { calculateDamage, applyDamage } from '../combat';
+import { P1_DEPLOY_COLS, P2_DEPLOY_COLS, GRID_COLS } from '../constants';
 
 export interface AttackTarget {
   unitUid: number;
-  type: 'melee';
+  type: 'melee' | 'ranged';
 }
 
-/**
- * Get valid attack targets for a unit.
- * - Melee units (ammo === 0, speed > 0): adjacent enemy units
- * - Buildings (speed 0): cannot attack
- * - Ranged units (ammo > 0): handled in Task 12, returns empty for now
- */
+function getAdjacentCells(unit: UnitInstance): Set<string> {
+  const cells = new Set<string>();
+  for (const oc of unit.occupiedCells) {
+    for (const n of hexNeighbors(oc.col, oc.row)) {
+      cells.add(`${n.col},${n.row}`);
+    }
+  }
+  return cells;
+}
+
+function isOnEnemyHalf(attackerPlayerId: number, targetCol: number): boolean {
+  if (attackerPlayerId === 0) return targetCol >= Math.ceil(GRID_COLS / 2);
+  return targetCol < Math.floor(GRID_COLS / 2);
+}
+
+function isAdjacentToEnemyMelee(state: GameState, attacker: UnitInstance): boolean {
+  const adjCells = getAdjacentCells(attacker);
+  for (const unit of state.units) {
+    if (!unit.alive || unit.playerId === attacker.playerId) continue;
+    const card = getCard(unit.cardId);
+    if (!isMelee(card)) continue;
+    for (const cell of unit.occupiedCells) {
+      if (adjCells.has(`${cell.col},${cell.row}`)) return true;
+    }
+  }
+  return false;
+}
+
 export function getAttackTargets(state: GameState, attackerUid: number): AttackTarget[] {
   const attacker = state.units.find(u => u.uid === attackerUid);
   if (!attacker || !attacker.alive) return [];
 
   const card = getCard(attacker.cardId);
-
-  // Buildings can't attack
   if (isBuilding(card)) return [];
 
-  // Ranged units — handled in Task 12
-  if (attacker.ammo > 0) return [];
-
-  // Must be melee (ammo === 0, speed > 0)
-  if (!isMelee(card) && attacker.speed <= 0) return [];
-
-  // Find adjacent enemy units
   const targets: AttackTarget[] = [];
-  const adjacentCells = new Set<string>();
+  const seenUids = new Set<number>();
 
-  // Gather all cells adjacent to any of attacker's occupied cells
-  for (const occupied of attacker.occupiedCells) {
-    for (const neighbor of hexNeighbors(occupied.col, occupied.row)) {
-      adjacentCells.add(`${neighbor.col},${neighbor.row}`);
+  if (isRanged(card) && attacker.ammo > 0) {
+    for (const unit of state.units) {
+      if (!unit.alive || unit.playerId === attacker.playerId) continue;
+      targets.push({ unitUid: unit.uid, type: 'ranged' });
     }
+    return targets;
   }
 
-  // Check each alive enemy unit for adjacency
-  const seenUids = new Set<number>();
+  if (!isMelee(card)) return [];
+
+  const adjCells = getAdjacentCells(attacker);
   for (const unit of state.units) {
     if (!unit.alive || unit.playerId === attacker.playerId || seenUids.has(unit.uid)) continue;
-    // Check if any of the unit's occupied cells are adjacent
     for (const cell of unit.occupiedCells) {
-      if (adjacentCells.has(`${cell.col},${cell.row}`)) {
+      if (adjCells.has(`${cell.col},${cell.row}`)) {
         targets.push({ unitUid: unit.uid, type: 'melee' });
         seenUids.add(unit.uid);
         break;
@@ -58,37 +73,21 @@ export function getAttackTargets(state: GameState, attackerUid: number): AttackT
   return targets;
 }
 
-/**
- * Check if a specific attack is valid.
- */
 export function canAttack(
   state: GameState,
   attackerUid: number,
   targetUid: number,
 ): { valid: boolean; reason?: string } {
   const attacker = state.units.find(u => u.uid === attackerUid);
-  if (!attacker || !attacker.alive) {
-    return { valid: false, reason: 'Attacker is dead or not found' };
-  }
-
-  if (attacker.remainingAp <= 0) {
-    return { valid: false, reason: 'Attacker has no action points' };
-  }
+  if (!attacker || !attacker.alive) return { valid: false, reason: 'Attacker is dead or not found' };
+  if (attacker.remainingAp <= 0) return { valid: false, reason: 'No action points' };
 
   const target = state.units.find(u => u.uid === targetUid);
-  if (!target || !target.alive) {
-    return { valid: false, reason: 'Target is dead or not found' };
-  }
+  if (!target || !target.alive) return { valid: false, reason: 'Target is dead or not found' };
+  if (target.playerId === attacker.playerId) return { valid: false, reason: 'Cannot attack friendly units' };
 
-  if (target.playerId === attacker.playerId) {
-    return { valid: false, reason: 'Cannot attack friendly units' };
-  }
-
-  // Check if target is in the valid attack targets list
   const validTargets = getAttackTargets(state, attackerUid);
-  if (!validTargets.some(t => t.unitUid === targetUid)) {
-    return { valid: false, reason: 'Target is not in range' };
-  }
+  if (!validTargets.some(t => t.unitUid === targetUid)) return { valid: false, reason: 'Target not in range' };
 
   return { valid: true };
 }
@@ -97,6 +96,7 @@ export interface AttackResult {
   damage: number;
   isCrit: boolean;
   targetDied: boolean;
+  attackType: 'melee' | 'ranged';
   retaliation?: {
     damage: number;
     isCrit: boolean;
@@ -104,13 +104,6 @@ export interface AttackResult {
   };
 }
 
-/**
- * Execute a melee attack.
- *
- * 1. Calculate and apply damage to target
- * 2. If target survives, is melee, adjacent, and hasn't retaliated: retaliate
- * 3. Set attacker's remaining AP to 0
- */
 export function executeAttack(
   state: GameState,
   attackerUid: number,
@@ -118,21 +111,47 @@ export function executeAttack(
 ): AttackResult {
   const attacker = state.units.find(u => u.uid === attackerUid)!;
   const target = state.units.find(u => u.uid === targetUid)!;
+  const attackerCard = getCard(attacker.cardId);
 
-  // 1. Calculate and apply damage to target
-  const damageResult = calculateDamage(attacker, target, state.rng);
-  const targetDied = applyDamage(state, targetUid, damageResult.damage);
+  const targets = getAttackTargets(state, attackerUid);
+  const targetInfo = targets.find(t => t.unitUid === targetUid)!;
+  const attackType = targetInfo.type;
+
+  let damageResult = calculateDamage(attacker, target, state.rng);
+  let finalDamage = damageResult.damage;
+
+  if (attackType === 'ranged') {
+    let multiplier = 1;
+
+    // Half damage on enemy half (unless Marksman)
+    if (isOnEnemyHalf(attacker.playerId, target.col) && !hasAbility(attackerCard, 'marksman')) {
+      multiplier *= 0.5;
+    }
+
+    // Half damage if blocked by adjacent enemy melee
+    if (isAdjacentToEnemyMelee(state, attacker)) {
+      multiplier *= 0.5;
+    }
+
+    if (multiplier < 1) {
+      finalDamage = Math.max(1, Math.floor(finalDamage * multiplier));
+    }
+
+    attacker.ammo--;
+  }
+
+  const targetDied = applyDamage(state, targetUid, finalDamage);
 
   const result: AttackResult = {
-    damage: damageResult.damage,
+    damage: finalDamage,
     isCrit: damageResult.isCrit,
     targetDied,
+    attackType,
   };
 
-  // 2. Retaliation check
-  if (!targetDied && !target.retaliatedThisTurn) {
+  // Retaliation: melee only, target alive, hasn't retaliated, is melee unit
+  if (attackType === 'melee' && !targetDied && !target.retaliatedThisTurn) {
     const targetCard = getCard(target.cardId);
-    // Target must be melee (ammo === 0, speed > 0) to retaliate
     if (isMelee(targetCard) && !isBuilding(targetCard)) {
       const retDamage = calculateDamage(target, attacker, state.rng);
       const attackerDied = applyDamage(state, attackerUid, retDamage.damage);
@@ -145,8 +164,6 @@ export function executeAttack(
     }
   }
 
-  // 3. Consume all AP
   attacker.remainingAp = 0;
-
   return result;
 }

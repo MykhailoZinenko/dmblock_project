@@ -273,16 +273,17 @@ describe('getAttackTargets', () => {
     expect(getAttackTargets(state, 1)).toHaveLength(0);
   });
 
-  it('ranged unit (ammo > 0) returns empty for melee targets', () => {
+  it('ranged unit (ammo > 0) returns ranged targets', () => {
     const state = createGameState(42);
-    // Archer (id 2) has ammo > 0
     const ranged = makeUnit({ uid: 1, cardId: 2, playerId: 0, col: 3, row: 3 });
-    const enemy = makeUnit({ uid: 2, cardId: 0, playerId: 1, col: 4, row: 3 });
+    const enemy = makeUnit({ uid: 2, cardId: 0, playerId: 1, col: 10, row: 3 });
     placeUnit(state, ranged);
     placeUnit(state, enemy);
 
-    // Ranged attack handled in Task 12
-    expect(getAttackTargets(state, 1)).toHaveLength(0);
+    const targets = getAttackTargets(state, 1);
+    expect(targets).toHaveLength(1);
+    expect(targets[0].type).toBe('ranged');
+    expect(targets[0].unitUid).toBe(2);
   });
 
   it('dead attacker returns empty', () => {
