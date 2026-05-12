@@ -100,8 +100,7 @@ function applyStatus(
 ): void {
   const original = { attack: unit.attack, defense: unit.defense, speed: unit.speed };
 
-  // +1 so the effect survives the rest of the current turn and lasts `duration` full turns
-  const effect: ActiveEffect = { cardId, type, turnsRemaining: duration + 1, originalStats: original };
+  const effect: ActiveEffect = { cardId, type, activationsLeft: duration, originalStats: original };
   unit.activeEffects.push(effect);
 
   if (type === 'slow') {
@@ -178,6 +177,21 @@ export function executeCast(
   return { success: true, affectedUnits: affected };
 }
 
+/**
+ * Called when a unit finishes its activation.
+ * Decrements activationsLeft for all effects on that unit.
+ */
+export function tickUnitEffects(unit: UnitInstance): void {
+  if (!unit.activeEffects?.length) return;
+  for (const effect of unit.activeEffects) {
+    effect.activationsLeft--;
+  }
+}
+
+/**
+ * Called at turn start. Removes expired effects (activationsLeft <= 0),
+ * restores original stats. Returns UIDs of units whose effects expired.
+ */
 export function tickStatusEffects(state: GameState): number[] {
   const expiredUids: number[] = [];
 
@@ -186,8 +200,7 @@ export function tickStatusEffects(state: GameState): number[] {
 
     const remaining: ActiveEffect[] = [];
     for (const effect of unit.activeEffects) {
-      effect.turnsRemaining--;
-      if (effect.turnsRemaining <= 0) {
+      if (effect.activationsLeft <= 0) {
         if (effect.originalStats) {
           unit.attack = effect.originalStats.attack;
           unit.defense = effect.originalStats.defense;

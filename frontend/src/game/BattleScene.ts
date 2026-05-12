@@ -446,20 +446,26 @@ export class BattleScene {
   async preloadSheep(): Promise<void> {
     const anim = sheepSpriteConfig.anims.find(a => a.state === 'idle');
     if (anim) {
-      await this.engine.textures.load('sheep_idle', `${sheepSpriteConfig.basePath}/${anim.file}`);
+      await this.engine.textures.load(`u${sheepSpriteConfig.cardId}_idle`, `${sheepSpriteConfig.basePath}/${anim.file}`);
+    }
+    const bounce = sheepSpriteConfig.anims.find(a => a.state === 'bounce');
+    if (bounce) {
+      await this.engine.textures.load(`u${sheepSpriteConfig.cardId}_bounce`, `${sheepSpriteConfig.basePath}/${bounce.file}`);
     }
   }
 
   swapToSheep(uid: number): void {
     const entry = this.units.get(uid);
     if (!entry) return;
-    entry.anim.swapToSheep();
+    entry.anim.swapConfig(sheepSpriteConfig);
+    entry.anim.playIdle();
   }
 
   restoreFromSheep(uid: number): void {
     const entry = this.units.get(uid);
     if (!entry) return;
-    entry.anim.restoreFromSheep();
+    entry.anim.restoreConfig();
+    entry.anim.playIdle();
   }
 
   // ── Cleanup ──────────────────────────────────────────

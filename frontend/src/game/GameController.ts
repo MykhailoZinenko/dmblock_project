@@ -3,7 +3,7 @@ import type { GameState } from './GameState';
 import { buildInitiativeQueue } from './initiative';
 import { MANA_PER_TURN, MANA_CAP } from './constants';
 import type { UnitInstance, GamePhase } from './types';
-import { tickStatusEffects } from './actions/castSpell';
+import { tickStatusEffects, tickUnitEffects } from './actions/castSpell';
 
 export type GameEvent =
   | 'turnStart'
@@ -89,6 +89,9 @@ export class GameController {
 
   private nextActivation(): void {
     const currentUnit = this.getCurrentUnit();
+    if (currentUnit && currentUnit.alive) {
+      tickUnitEffects(currentUnit);
+    }
     this.emit('activationEnd', { unit: currentUnit });
 
     this.state.currentActivationIndex++;

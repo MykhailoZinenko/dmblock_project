@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createGameState } from '../GameState';
 import { executeSpawn } from '../actions/spawnUnit';
-import { getSpellTargets, canCast, executeCast, tickStatusEffects } from '../actions/castSpell';
+import { getSpellTargets, canCast, executeCast, tickStatusEffects, tickUnitEffects } from '../actions/castSpell';
 
 describe('getSpellTargets', () => {
   it('Healing (10) returns friendly unit hexes', () => {
@@ -134,8 +134,8 @@ describe('executeCast', () => {
   });
 });
 
-describe('tickStatusEffects', () => {
-  it('removes expired effects and restores stats after full duration', () => {
+describe('tickUnitEffects + tickStatusEffects', () => {
+  it('effect expires after unit activation + turn start', () => {
     const state = createGameState(100);
     const enemy = executeSpawn(state, 1, 5, { col: 14, row: 0 });
     const origAtk = enemy.attack;
@@ -143,11 +143,14 @@ describe('tickStatusEffects', () => {
     const result = executeCast(state, 0, 15, { col: 14, row: 0 });
     if (result.success) {
       expect(enemy.polymorphed).toBe(true);
-      // First tick: current turn ends, effect survives (turnsRemaining goes from 2 to 1)
+      expect(enemy.activeEffects[0].activationsLeft).toBe(1);
+      // Turn start cleanup — activationsLeft is still 1, no removal
       const expired1 = tickStatusEffects(state);
       expect(expired1).toHaveLength(0);
-      expect(enemy.polymorphed).toBe(true);
-      // Second tick: effect expires
+      // Unit activates and finishes — tick decrements to 0
+      tickUnitEffects(enemy);
+      expect(enemy.activeEffects[0].activationsLeft).toBe(0);
+      // Next turn start — effect removed, stats restored
       const expired2 = tickStatusEffects(state);
       expect(expired2).toContain(enemy.uid);
       expect(enemy.polymorphed).toBe(false);
@@ -156,20 +159,23 @@ describe('tickStatusEffects', () => {
     }
   });
 
-  it('does not remove effects with turns remaining', () => {
+  it('effect survives if activations remain', () => {
     const state = createGameState(100);
     const enemy = executeSpawn(state, 1, 5, { col: 14, row: 0 });
     state.players[0].mana = 20;
     enemy.activeEffects.push({
       cardId: 12,
       type: 'slow',
-      turnsRemaining: 2,
+      activationsLeft: 2,
       originalStats: { attack: enemy.attack, defense: enemy.defense, speed: enemy.speed },
     });
     enemy.speed = Math.max(1, enemy.speed - 1);
+    // Unit activates — tick to 1
+    tickUnitEffects(enemy);
+    expect(enemy.activeEffects[0].activationsLeft).toBe(1);
+    // Turn start — still has activations, no removal
     const expired = tickStatusEffects(state);
     expect(expired).toHaveLength(0);
     expect(enemy.activeEffects).toHaveLength(1);
-    expect(enemy.activeEffects[0].turnsRemaining).toBe(1);
   });
 });

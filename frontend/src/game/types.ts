@@ -124,7 +124,7 @@ export interface TerrainEffect {
 export interface ActiveEffect {
   cardId: number;
   type: 'slow' | 'polymorph' | 'curse';
-  turnsRemaining: number;
+  activationsLeft: number;
   originalStats?: { attack: number; defense: number; speed: number };
 }
 
