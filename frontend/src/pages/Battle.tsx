@@ -383,8 +383,8 @@ export default function Battle() {
       setPriority(newPrio);
       prioRef.current = newPrio;
       sceneRef.current?.clearHighlights();
-      sendAction({ type: 'pass', priorityPhase: true, priorityPlayerId: player });
       advanceTurn();
+      sendAction({ type: 'pass', priorityPhase: true, priorityPlayerId: player });
       return;
     }
 
@@ -392,12 +392,12 @@ export default function Battle() {
     const releasedUid = cu?.uid;
     if (cu) trackActivated(cu.uid);
     ctrl.passActivation();
-    sendAction(
-      releasedUid !== undefined ? { type: 'pass', releasedUnitUid: releasedUid } : { type: 'pass' },
-    );
     sceneRef.current?.clearHighlights();
     resetTimer();
     advanceTurn();
+    sendAction(
+      releasedUid !== undefined ? { type: 'pass', releasedUnitUid: releasedUid } : { type: 'pass' },
+    );
   }, [advanceTurn, trackActivated, resetTimer, sendAction]);
 
   // ─── Hex click handler ──────────────────────────────
@@ -498,14 +498,6 @@ export default function Battle() {
 
         const unit = executeSpawn(state, player, currentUI.cardId, { col, row });
         scene.spawnUnit(unit);
-        sendAction({
-          type: 'spawn',
-          playerId: player,
-          cardId: currentUI.cardId,
-          col,
-          row,
-          priorityPhase: currentPhase.type === 'priority',
-        });
 
         if (currentPhase.type === 'priority') {
           ctrl.rebuildQueue();
@@ -533,6 +525,14 @@ export default function Battle() {
           scene.clearHighlights();
           advanceTurn();
         }
+        sendAction({
+          type: 'spawn',
+          playerId: player,
+          cardId: currentUI.cardId,
+          col,
+          row,
+          priorityPhase: currentPhase.type === 'priority',
+        });
         return;
       }
 
