@@ -4,6 +4,7 @@ import { ConnectionManager } from '../ConnectionManager';
 import { GameController } from '../../game/GameController';
 import type { PeerMessage, GameAction } from '../protocol';
 import { ACTIVATION_TIMER_SECONDS, TIMEOUT_DAMAGE } from '../../game/constants';
+import { executeSpawn } from '../../game/actions/spawnUnit';
 
 // ---------------------------------------------------------------------------
 // Helpers — fake ConnectionManager
@@ -137,6 +138,24 @@ describe('MatchManager', () => {
       expect(match.isMyTurn).toBe(true);
       match.setUiActivePlayer(1);
       expect(match.isMyTurn).toBe(false);
+    });
+
+    it('priority deploy uses ui seat even when activation queue has units', async () => {
+      const ctrl = await setupPlaying();
+      const state = ctrl.getState();
+      executeSpawn(state, 0, 0, { col: 0, row: 0 });
+      ctrl.rebuildQueue();
+      expect(ctrl.getControllingPlayer()).toBe(0);
+
+      match.setBattlePriorityPhase(true);
+      match.setUiActivePlayer(1);
+      expect(match.isMyTurn).toBe(false);
+
+      match.setUiActivePlayer(0);
+      expect(match.isMyTurn).toBe(true);
+
+      match.setBattlePriorityPhase(false);
+      expect(match.isMyTurn).toBe(true);
     });
   });
 

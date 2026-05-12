@@ -115,6 +115,7 @@ export default function Battle() {
     const s = ctrl.getState();
     if (isMultiplayer && matchRef.current) {
       matchRef.current.setUiActivePlayer(getActivePlayer());
+      matchRef.current.setBattlePriorityPhase(phaseRef.current.type === 'priority');
     }
     setMana([s.players[0].mana, s.players[1].mana]);
     setHeroHp([s.players[0].heroHp, s.players[1].heroHp]);

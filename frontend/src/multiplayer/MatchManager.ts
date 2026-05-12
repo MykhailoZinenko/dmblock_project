@@ -59,6 +59,13 @@ export class MatchManager {
    */
   private uiActivePlayer: number | null = null;
 
+  /**
+   * During React "priority" deploy rounds, `rebuildQueue()` may already fill `activationQueue`,
+   * so `getControllingPlayer()` would point at a unit owner — not the alternating deploy seat.
+   * Battle toggles this from `syncUI` so `isMyTurn` follows deploy priority, not initiative head.
+   */
+  private battlePriorityPhase = false;
+
   private timerHandle: ReturnType<typeof setTimeout> | null = null;
   private activationStartTime = 0;
   private timeoutCount = 0;
@@ -90,8 +97,18 @@ export class MatchManager {
     this.uiActivePlayer = playerId;
   }
 
+  /** Call from `Battle.syncUI` — true while alternating free-deploy (priority) is active. */
+  setBattlePriorityPhase(active: boolean): void {
+    this.battlePriorityPhase = active;
+  }
+
   get isMyTurn(): boolean {
     if (!this.ctrl) return false;
+    if (this.battlePriorityPhase) {
+      const seat = this.uiActivePlayer;
+      if (seat === null || seat < 0) return false;
+      return seat === this.conn.playerIndex;
+    }
     const cp = this.ctrl.getControllingPlayer();
     const seat = cp >= 0 ? cp : this.uiActivePlayer;
     if (seat === null || seat < 0) return false;
