@@ -21,6 +21,7 @@ type EventMap = {
   'state-snapshot': [state: SerializedGameState, seq: number];
   'turn-timeout': [player: number, damage: number];
   'game-over': [winner: number, reason: string];
+  'waiting-for-opponent': [];
   'sign-request': [duelId: number, winner: string];
   'action-log': [sessionSignatures: [string, string], actions: ActionLogEntry[]];
   'opponent-disconnected': [];
@@ -96,6 +97,7 @@ export class ServerConnection {
         break;
       case 'waiting-for-opponent':
         this.setState('waiting');
+        this.emit('waiting-for-opponent');
         break;
       case 'match-started':
         this._seat = msg.seat;

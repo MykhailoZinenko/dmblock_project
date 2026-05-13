@@ -32,6 +32,7 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
   const conn = new ServerConnection(serverUrl, p.duelId, p.address);
   p.serverRef.current = conn;
 
+  // ── Auth ──
   conn.on('auth-challenge', (nonce: string) => {
     p.setMultiplayerStatus('Signing session...');
     conn.authenticate(p.signTypedData, nonce).catch(() => {
@@ -39,123 +40,87 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     });
   });
 
-  conn.on('state-change', (state) => {
-    if (state === 'waiting') {
-      // auth-ok received — now safe to submit deck
-      if (deckSubmitted) return;
-      deckSubmitted = true;
-      p.setMultiplayerStatus('Authenticated. Submitting deck...');
-      const decks = listDecks(p.address);
-      const validDeck = decks.find(d => d.slots.filter(s => s !== null).length === DECK_SIZE);
-      if (!validDeck) {
-        p.setMultiplayerStatus('No valid deck found!');
-        return;
-      }
-      const deckIds = validDeck.slots.filter((s): s is number => s !== null);
-      conn.submitDeck(deckIds);
-      p.setMultiplayerStatus('Deck submitted. Waiting for opponent...');
+  // ── New game: server asks us to submit deck ──
+  conn.on('waiting-for-opponent', () => {
+    p.setMultiplayerStatus('Submitting deck...');
+    const decks = listDecks(p.address);
+    const validDeck = decks.find(d => d.slots.filter(s => s !== null).length === DECK_SIZE);
+    if (!validDeck) {
+      p.setMultiplayerStatus('No valid deck found!');
+      return;
     }
+    conn.submitDeck(validDeck.slots.filter((s): s is number => s !== null));
+    p.setMultiplayerStatus('Waiting for opponent...');
   });
-  let deckSubmitted = false;
 
-  conn.on('match-started', (state: SerializedGameState, seat: 0 | 1, _opponent: string, _seq: number, controllingPlayer: number) => {
+  // ── Match started (new game OR reconnect — same handler) ──
+  conn.on('match-started', (serverState, seat, _opponent, _seq, controllingPlayer) => {
     p.setMySeat(seat);
-    p.setMyTurn(controllingPlayer === seat);
-    p.setMultiplayerStatus('Battle started!');
-    setTimeout(() => p.setMultiplayerStatus(''), 2000);
-
-    const ctrl = p.getCtrl();
-    if (!ctrl) return;
-
-    ctrl.startGame(0, [state.players[0].hand, state.players[1].hand]);
-
-    const s = ctrl.getState();
-    s.turnNumber = state.turnNumber;
-    s.nextUnitUid = state.nextUnitUid;
-    s.currentActivationIndex = state.currentActivationIndex;
-    s.phase = state.phase;
-    s.players[0].mana = state.players[0].mana;
-    s.players[0].heroHp = state.players[0].heroHp;
-    s.players[1].mana = state.players[1].mana;
-    s.players[1].heroHp = state.players[1].heroHp;
-    s.players[seat].hand = state.players[seat].hand;
-    s.players[seat].deck = state.players[seat].deck;
-
-    p.syncUI();
-  });
-
-  conn.on('action-confirmed', (_seq: number, _action: GameAction, events: MatchEvent[], serverState: SerializedGameState, controllingPlayer: number) => {
-    const scene = p.getScene();
-    const ctrl = p.getCtrl();
-    if (!scene || !ctrl) return;
-
-    const localState = ctrl.getState();
-    playEventsOnScene(scene, localState, events);
-    applyServerSnapshot(localState, serverState);
-    p.syncUI();
-    p.resetTimer();
-    p.setMyTurn(controllingPlayer === conn.seat);
-  });
-
-  conn.on('action-rejected', (_seq: number, reason: string) => {
-    console.warn('Action rejected:', reason);
-    p.setMultiplayerStatus(`Rejected: ${reason}`);
-    setTimeout(() => p.setMultiplayerStatus(''), 3000);
-    p.setMyTurn(true);
-  });
-
-  conn.on('turn-timeout', (player: number, damage: number) => {
-    const scene = p.getScene();
-    if (scene && damage > 0) {
-      scene.showStampDamage(player, damage);
-    }
-  });
-
-  conn.on('game-over', (winner: number, _reason: string) => {
-    p.setGameOver({ winner });
-    const ctrl = p.getCtrl();
-    if (ctrl?.isGameStarted()) {
-      ctrl.getState().phase = 'GAME_OVER';
-    }
-  });
-
-  conn.on('state-snapshot', (snapshot: SerializedGameState, _seq: number) => {
-    p.setMultiplayerStatus('Reconnected!');
-    setTimeout(() => p.setMultiplayerStatus(''), 2000);
+    p.setMultiplayerStatus('');
 
     const ctrl = p.getCtrl();
     const scene = p.getScene();
     if (!ctrl || !scene) return;
 
+    // Initialize or reset controller
     if (!ctrl.isGameStarted()) {
-      ctrl.startGame(0, [snapshot.players[0].hand, snapshot.players[1].hand]);
+      ctrl.startGame(0, [serverState.players[0].hand, serverState.players[1].hand]);
     }
-    const localState = ctrl.getState();
-    applyServerSnapshot(localState, snapshot);
+    applyServerSnapshot(ctrl.getState(), serverState);
 
+    // Rebuild scene
     scene.clearAllUnits();
-    for (const unit of localState.units) {
+    for (const unit of ctrl.getState().units) {
       if (unit.alive) scene.spawnUnit(unit);
     }
 
     p.syncUI();
+    p.setMyTurn(controllingPlayer === seat);
   });
 
+  // ── Action confirmed: play visuals, replace state ──
+  conn.on('action-confirmed', (_seq, _action, events, serverState, controllingPlayer) => {
+    const ctrl = p.getCtrl();
+    const scene = p.getScene();
+    if (!ctrl || !scene) return;
+
+    playEventsOnScene(scene, ctrl.getState(), events);
+    applyServerSnapshot(ctrl.getState(), serverState);
+    p.syncUI();
+    p.resetTimer();
+    p.setMyTurn(controllingPlayer === conn.seat);
+  });
+
+  // ── Action rejected: reset UI ──
+  conn.on('action-rejected', (_seq, reason) => {
+    p.setMultiplayerStatus(`Rejected: ${reason}`);
+    setTimeout(() => p.setMultiplayerStatus(''), 3000);
+    p.setMyTurn(true);
+  });
+
+  // ── Timeout ──
+  conn.on('turn-timeout', (player, damage) => {
+    const scene = p.getScene();
+    if (scene && damage > 0) scene.showStampDamage(player, damage);
+  });
+
+  // ── Game over ──
+  conn.on('game-over', (winner) => {
+    p.setGameOver({ winner });
+  });
+
+  // ── Connection events ──
   conn.on('opponent-disconnected', () => {
     p.setMultiplayerStatus('Opponent disconnected. Waiting 60s...');
   });
-
   conn.on('opponent-reconnected', () => {
     p.setMultiplayerStatus('Opponent reconnected!');
     setTimeout(() => p.setMultiplayerStatus(''), 2000);
   });
-
-  conn.on('sign-request', (_duelId: number, winner: string) => {
-    // TODO: prompt wallet to sign settlement
+  conn.on('sign-request', (_duelId, winner) => {
     console.log('Settlement sign requested. Winner:', winner);
   });
-
-  conn.on('error', (message: string) => {
+  conn.on('error', (message) => {
     p.setMultiplayerStatus(`Error: ${message}`);
   });
 
@@ -166,30 +131,27 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
   };
 }
 
-/**
- * Play animations from MatchEvents. Does NOT update game state —
- * state comes from the server snapshot via applyServerSnapshot.
- */
-function playEventsOnScene(
-  scene: BattleScene,
-  localState: GameState,
-  events: MatchEvent[],
-): void {
+// ── Play animations from events (visuals only, no state mutation) ──
+
+function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEvent[]): void {
   for (const event of events) {
     switch (event.type) {
-      case 'unit-spawned': {
+      case 'unit-spawned':
         scene.spawnUnit(event.unit);
         break;
-      }
-      case 'unit-moved': {
+
+      case 'unit-moved':
         if (event.path.length >= 2) {
           scene.moveUnit(event.uid, event.path, () => {});
         }
         break;
-      }
+
       case 'unit-attacked': {
-        const target = localState.units.find(u => u.uid === event.targetUid);
-        const attacker = localState.units.find(u => u.uid === event.attackerUid);
+        const target = state.units.find(u => u.uid === event.targetUid);
+        const attacker = state.units.find(u => u.uid === event.attackerUid);
+        if (attacker && target) {
+          scene.playAttack(attacker.uid, { col: target.col, row: target.row }, () => {});
+        }
         if (target) {
           scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
           scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
@@ -200,40 +162,43 @@ function playEventsOnScene(
         }
         break;
       }
-      case 'hero-attacked': {
+
+      case 'hero-attacked':
         scene.showHeroDamage(event.targetPlayerId, event.damage, false);
         scene.updateHeroHp(event.targetPlayerId, event.heroHp, HERO_HP);
         break;
-      }
-      case 'unit-died': {
+
+      case 'unit-died':
         scene.playDeath(event.uid, () => {});
         break;
-      }
-      case 'spell-cast': {
+
+      case 'spell-cast':
         scene.playSpellFx(event.cardId, { col: event.col, row: event.row }, () => {});
         break;
-      }
+
       case 'effect-applied': {
         if (event.effectId === 'polymorph') scene.swapToSheep(event.uid);
         const label = event.effectId === 'slow' ? 'SLOWED'
           : event.effectId === 'polymorph' ? 'POLYMORPHED' : 'CURSED';
-        const u = localState.units.find(x => x.uid === event.uid);
+        const u = state.units.find(x => x.uid === event.uid);
         if (u) scene.showStatusText({ col: u.col, row: u.row }, label);
         break;
       }
-      case 'effect-expired': {
+
+      case 'effect-expired':
         if (event.effectId === 'polymorph') scene.restoreFromSheep(event.uid);
         break;
-      }
+
       case 'hp-changed': {
-        const u = localState.units.find(x => x.uid === event.uid);
+        const u = state.units.find(x => x.uid === event.uid);
         if (u) scene.updateHpBar(u.uid, event.hp, u.maxHp);
         break;
       }
-      case 'hero-hp-changed': {
+
+      case 'hero-hp-changed':
         scene.updateHeroHp(event.playerId, event.hp, HERO_HP);
         break;
-      }
+
       default:
         break;
     }
@@ -241,50 +206,39 @@ function playEventsOnScene(
   scene.clearHighlights();
 }
 
-/**
- * Replace local game state with server snapshot.
- * This is the ONLY source of truth for state — events are for visuals only.
- */
-function applyServerSnapshot(localState: GameState, snapshot: SerializedGameState): void {
-  // Players: copy all fields the server sends (opponent hand/deck are empty — that's correct)
+// ── Replace local state with server snapshot ──
+
+function applyServerSnapshot(local: GameState, snapshot: SerializedGameState): void {
   for (let i = 0; i < 2; i++) {
-    localState.players[i].mana = snapshot.players[i].mana;
-    localState.players[i].heroHp = snapshot.players[i].heroHp;
-    localState.players[i].timeoutCount = snapshot.players[i].timeoutCount;
-    if (snapshot.players[i].hand.length > 0) {
-      localState.players[i].hand = snapshot.players[i].hand;
-    }
-    if (snapshot.players[i].deck.length > 0) {
-      localState.players[i].deck = snapshot.players[i].deck;
-    }
+    local.players[i].mana = snapshot.players[i].mana;
+    local.players[i].heroHp = snapshot.players[i].heroHp;
+    local.players[i].timeoutCount = snapshot.players[i].timeoutCount;
+    if (snapshot.players[i].hand.length > 0) local.players[i].hand = snapshot.players[i].hand;
+    if (snapshot.players[i].deck.length > 0) local.players[i].deck = snapshot.players[i].deck;
   }
 
-  // Units: replace entirely from snapshot
-  localState.units = snapshot.units;
+  local.units = snapshot.units;
 
-  // Board: rebuild from units
-  for (let r = 0; r < localState.board.length; r++) {
-    for (let c = 0; c < localState.board[r].length; c++) {
-      localState.board[r][c].unitUid = null;
+  for (let r = 0; r < local.board.length; r++) {
+    for (let c = 0; c < local.board[r].length; c++) {
+      local.board[r][c].unitUid = null;
     }
   }
-  for (const unit of localState.units) {
+  for (const unit of local.units) {
     if (!unit.alive) continue;
     for (const cell of unit.occupiedCells) {
-      if (cell.row < localState.board.length && cell.col < localState.board[0].length) {
-        localState.board[cell.row][cell.col].unitUid = unit.uid;
+      if (cell.row < local.board.length && cell.col < local.board[0].length) {
+        local.board[cell.row][cell.col].unitUid = unit.uid;
       }
     }
   }
 
-  // Turn / queue
-  localState.turnNumber = snapshot.turnNumber;
-  localState.currentActivationIndex = snapshot.currentActivationIndex;
-  localState.nextUnitUid = snapshot.nextUnitUid;
-  localState.phase = snapshot.phase;
+  local.turnNumber = snapshot.turnNumber;
+  local.currentActivationIndex = snapshot.currentActivationIndex;
+  local.nextUnitUid = snapshot.nextUnitUid;
+  local.phase = snapshot.phase;
 
-  // Activation queue: map UIDs to unit references
-  localState.activationQueue = snapshot.activationQueue
-    .map(uid => localState.units.find(u => u.uid === uid))
+  local.activationQueue = snapshot.activationQueue
+    .map(uid => local.units.find(u => u.uid === uid))
     .filter((u): u is NonNullable<typeof u> => u !== undefined);
 }

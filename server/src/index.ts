@@ -161,17 +161,21 @@ wss.on('connection', (ws) => {
             player.authenticated = true;
             player.sessionKey = deriveSessionKey(msg.signature);
             player.sessionSignature = msg.signature;
+            const isReconnect = !!(room.runtime && room.runtime.phase === 'playing');
             send(ws, { type: 'auth-ok', sessionStart: Date.now() });
 
-            // Reconnect: match already in progress → send snapshot
-            if (room.runtime && room.runtime.phase === 'playing') {
-              send(ws, {
-                type: 'state-snapshot',
-                state: room.runtime.getSnapshotForSeat(clientState.seat),
-                seq: room.runtime.seq,
-              });
+            if (isReconnect) {
               const opp = getOpponent(room, clientState.seat);
               if (opp?.ws) send(opp.ws, { type: 'opponent-reconnected' });
+              send(ws, {
+                type: 'match-started',
+                seat: clientState.seat,
+                opponent: opp?.address ?? '',
+                state: room.runtime.getSnapshotForSeat(clientState.seat),
+                seq: room.runtime.seq,
+                controllingPlayer: room.runtime.getControllingPlayer(),
+              });
+              startActivationTimer(room);
               return;
             }
             send(ws, { type: 'waiting-for-opponent' });
