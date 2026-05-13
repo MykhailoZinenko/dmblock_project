@@ -243,10 +243,10 @@ wss.on('connection', (ws) => {
 
         sendActionConfirmed(room, msg.action, result.events);
 
-        startActivationTimer(room);
-
         if (room.runtime.phase === 'game-over') {
           handleGameOver(room);
+        } else {
+          startActivationTimer(room);
         }
         break;
       }
@@ -288,6 +288,13 @@ wss.on('connection', (ws) => {
     const duelId = clientState.duelId;
     const room = getOrCreateRoom(duelId);
     const seat = clientState.seat;
+
+    // Game already over — clean up immediately
+    if (room.runtime && room.runtime.phase === 'game-over') {
+      cleanupRoom(duelId);
+      cleanupSettlement(duelId);
+      return;
+    }
 
     const opp = getOpponent(room, seat);
     if (opp?.ws) send(opp.ws, { type: 'opponent-disconnected' });
