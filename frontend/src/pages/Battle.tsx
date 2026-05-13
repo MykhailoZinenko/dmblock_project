@@ -62,7 +62,7 @@ export default function Battle() {
   const [barrierState, setBarrierState] = useState([true, true]);
   const [settled, setSettled] = useState(false);
   const [settlementPending, setSettlementPending] = useState(false);
-  const pendingSignRef = useRef<{ duelId: number; winner: string } | null>(null);
+  const [pendingSign, setPendingSign] = useState<{ duelId: number; winner: string } | null>(null);
   const [myTurn, setMyTurn] = useState(false);
 
   const uiRef = useRef(ui); uiRef.current = ui;
@@ -476,7 +476,7 @@ export default function Battle() {
         message: { raw: message },
       }),
       setSettled,
-      pendingSignRef,
+      setPendingSign,
     });
   }, [duelId, address, walletClient, syncUI, resetTimer]);
 
@@ -726,16 +726,15 @@ export default function Battle() {
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-                  {!settled && pendingSignRef.current && !settlementPending && (
+                  {!settled && pendingSign && !settlementPending && (
                     <ArcanaButton variant="blue" size="md" onClick={async () => {
-                      const ps = pendingSignRef.current;
-                      if (!ps || !walletClient) return;
+                      if (!pendingSign || !walletClient) return;
                       setSettlementPending(true);
                       try {
                         const { keccak256, encodePacked, toBytes } = await import('viem');
-                        const hash = keccak256(encodePacked(['uint256', 'address'], [BigInt(ps.duelId), ps.winner as `0x${string}`]));
+                        const hash = keccak256(encodePacked(['uint256', 'address'], [BigInt(pendingSign.duelId), pendingSign.winner as `0x${string}`]));
                         const sig = await walletClient.signMessage({ account: walletClient.account, message: { raw: toBytes(hash) } });
-                        serverRef.current?.sendSignResult(ps.duelId, ps.winner, sig);
+                        serverRef.current?.sendSignResult(pendingSign.duelId, pendingSign.winner, sig);
                       } catch {
                         setSettlementPending(false);
                       }

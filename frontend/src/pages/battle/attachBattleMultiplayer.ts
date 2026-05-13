@@ -28,7 +28,7 @@ export interface AttachBattleMultiplayerInput {
   }) => Promise<`0x${string}`>;
   signMessage: (message: Uint8Array) => Promise<`0x${string}`>;
   setSettled: (v: boolean) => void;
-  pendingSignRef: { current: { duelId: number; winner: string } | null };
+  setPendingSign: (v: { duelId: number; winner: string } | null) => void;
 }
 
 export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => void {
@@ -123,7 +123,7 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     setTimeout(() => p.setMultiplayerStatus(''), 2000);
   });
   conn.on('sign-request', (_duelId, winner) => {
-    p.pendingSignRef.current = { duelId: _duelId, winner };
+    p.setPendingSign({ duelId: _duelId, winner });
   });
   conn.on('duel-settled', () => {
     p.setSettled(true);
