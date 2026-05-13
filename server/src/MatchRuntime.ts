@@ -247,7 +247,6 @@ export class MatchRuntime {
       }
       case 'cast': {
         if (action.playerId !== seat) return { ok: false, reason: 'Cannot cast for other player' };
-        if (this.turnPhase.type === 'priority') return { ok: false, reason: 'Cannot cast during priority phase' };
         const check = canCast(state, action.playerId, action.cardId, { col: action.col, row: action.row });
         if (!check.valid) return { ok: false, reason: check.reason ?? 'Cannot cast' };
         const card = getCard(action.cardId);
@@ -260,6 +259,11 @@ export class MatchRuntime {
         });
         if (!result.success) {
           events.push({ type: 'mana-changed', playerId: action.playerId, mana: state.players[action.playerId].mana });
+          if (this.turnPhase.type === 'priority') {
+            this.priorityUsed[seat as 0 | 1] = true;
+            this.advanceTurnPhase();
+            this.pushActivationEvent(events);
+          }
           return { ok: true };
         }
         for (const affected of result.affectedUnits) {
@@ -279,6 +283,11 @@ export class MatchRuntime {
           }
         }
         events.push({ type: 'mana-changed', playerId: action.playerId, mana: state.players[action.playerId].mana });
+        if (this.turnPhase.type === 'priority') {
+          this.priorityUsed[seat as 0 | 1] = true;
+          this.advanceTurnPhase();
+          this.pushActivationEvent(events);
+        }
         return { ok: true };
       }
       case 'pass': {

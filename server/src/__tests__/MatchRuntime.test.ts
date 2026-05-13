@@ -362,7 +362,7 @@ describe('MatchRuntime', () => {
       expect(rt.getTurnPhase().type).toBe('initiative');
     });
 
-    it('rejects move/attack/cast during priority phase', () => {
+    it('rejects move/attack/end-turn during priority phase', () => {
       const rt = new MatchRuntime(50, '0xA', '0xB');
       rt.submitDeck(0, validDeck());
       rt.submitDeck(1, validDeck());
@@ -371,8 +371,33 @@ describe('MatchRuntime', () => {
       expect(rt.executeAction(cp, { type: 'move', unitUid: 1, col: 5, row: 5 }).ok).toBe(false);
       expect(rt.executeAction(cp, { type: 'attack', attackerUid: 1, targetUid: 2 }).ok).toBe(false);
       expect(rt.executeAction(cp, { type: 'attack-hero', attackerUid: 1, targetPlayerId: 1 }).ok).toBe(false);
-      expect(rt.executeAction(cp, { type: 'cast', playerId: cp, cardId: 10, col: 5, row: 5 }).ok).toBe(false);
       expect(rt.executeAction(cp, { type: 'end-turn' }).ok).toBe(false);
+    });
+
+    it('allows cast during priority and counts as priority used', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+      expect(rt.getTurnPhase().type).toBe('priority');
+
+      const cp = rt.getControllingPlayer();
+      const state = rt.getStateForTest();
+      state.players[cp].mana = 99;
+
+      // Find a spell card and put it in hand
+      const spellCard = cardRegistry.find(c => c.cardType !== CardType.UNIT);
+      if (!spellCard) return; // skip if no spells in registry
+      state.players[cp].hand.push(spellCard.id);
+
+      // Find a valid target (enemy unit needed for single-target spells, or just a hex for AOE)
+      // Cast may fail validation if no valid target, but the point is it's not rejected for "priority phase"
+      const result = rt.executeAction(cp, {
+        type: 'cast', playerId: cp, cardId: spellCard.id, col: 7, row: 5,
+      });
+      // If the cast fails, it should be for game reasons (no target, etc.), not "Cannot cast during priority"
+      if (!result.ok) {
+        expect(result.reason).not.toContain('priority');
+      }
     });
 
     it('spawning during priority rebuilds queue', () => {

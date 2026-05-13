@@ -284,7 +284,9 @@ setInterval(() => {
   const now = Date.now();
   for (const [duelId, room] of getAllRooms()) {
     if (room.runtime?.phase === 'game-over') {
-      if (now - room.createdAt > MATCH_CLEANUP_MS) {
+      const log = room.runtime.actionLog;
+      const lastActionTime = log.length > 0 ? log[log.length - 1].timestamp : room.createdAt;
+      if (now - lastActionTime > MATCH_CLEANUP_MS) {
         cleanupSettlement(duelId);
         cleanupRoom(duelId);
       }
