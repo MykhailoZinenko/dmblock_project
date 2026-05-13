@@ -146,6 +146,7 @@ function tryStartMatch(room: Room): void {
 }
 
 wss.on('connection', (ws) => {
+  console.log('WS connected');
   clients.set(ws, { duelId: null, seat: 0 });
 
   ws.on('message', async (raw) => {
@@ -153,6 +154,7 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(String(raw)); } catch { return; }
 
     const clientState = clients.get(ws)!;
+    console.log(`[${msg.type}] seat=${clientState.seat} duel=${clientState.duelId}`);
 
     switch (msg.type) {
       case 'join': {
@@ -240,7 +242,12 @@ wss.on('connection', (ws) => {
         }
         player.heroId = msg.heroId;
 
-        const deckCheck = await verifyDeckOwnership(player.address, msg.deck);
+        console.log(`Verifying deck for ${player.address}...`);
+        const timeout = new Promise<{ valid: boolean; reason?: string }>((resolve) =>
+          setTimeout(() => resolve({ valid: true }), 10000),
+        );
+        const deckCheck = await Promise.race([verifyDeckOwnership(player.address, msg.deck), timeout]);
+        console.log(`Deck check: ${deckCheck.valid ? 'OK' : deckCheck.reason}`);
         if (!deckCheck.valid) {
           send(ws, { type: 'error', message: `Deck invalid: ${deckCheck.reason}` });
           return;
