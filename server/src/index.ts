@@ -45,6 +45,7 @@ function startActivationTimer(room: Room): void {
       action: { type: 'pass' },
       events,
       stateHash: '',
+      controllingPlayer: room.runtime.getControllingPlayer(),
     });
     if (room.runtime.phase === 'game-over') {
       handleGameOver(room);
@@ -75,6 +76,7 @@ function handleGameOver(room: Room): void {
 
 function tryStartMatch(room: Room): void {
   if (!room.runtime || room.runtime.phase !== 'playing') return;
+  const controllingPlayer = room.runtime.getControllingPlayer();
   for (const p of room.players) {
     if (p?.ws) {
       send(p.ws, {
@@ -83,6 +85,7 @@ function tryStartMatch(room: Room): void {
         opponent: room.players[p.seat === 0 ? 1 : 0]?.address ?? '',
         state: room.runtime.getSnapshotForSeat(p.seat),
         seq: room.runtime.seq,
+        controllingPlayer,
       });
     }
   }
@@ -217,6 +220,7 @@ wss.on('connection', (ws) => {
           action: msg.action,
           events: result.events,
           stateHash: result.stateHash,
+          controllingPlayer: room.runtime.getControllingPlayer(),
         });
 
         startActivationTimer(room);

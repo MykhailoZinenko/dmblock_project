@@ -45,6 +45,19 @@ export const DuelManagerAbi = [
   },
   {
     "type": "function",
+    "name": "LOSER_XP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "STARTING_ELO",
     "inputs": [],
     "outputs": [
@@ -52,6 +65,19 @@ export const DuelManagerAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "WINNER_XP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -73,6 +99,37 @@ export const DuelManagerAbi = [
     ],
     "outputs": [],
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "arbiter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "arbiterSettle",
+    "inputs": [
+      {
+        "name": "duelId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "winner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -351,6 +408,32 @@ export const DuelManagerAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setArbiter",
+    "inputs": [
+      {
+        "name": "arbiter_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setHeroNFT",
+    "inputs": [
+      {
+        "name": "heroNFT_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -681,6 +764,11 @@ export const DuelManagerAbi = [
   },
   {
     "type": "error",
+    "name": "NotArbiter",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotExpiredYet",
     "inputs": []
   },
@@ -724,35 +812,6 @@ export const DuelManagerAbi = [
   {
     "type": "error",
     "name": "WinnerNotParticipant",
-    "inputs": []
-  },
-  {
-    "type": "function",
-    "name": "arbiter",
-    "inputs": [],
-    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "setArbiter",
-    "inputs": [{ "name": "arbiter_", "type": "address", "internalType": "address" }],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "arbiterSettle",
-    "inputs": [
-      { "name": "duelId", "type": "uint256", "internalType": "uint256" },
-      { "name": "winner", "type": "address", "internalType": "address" }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "error",
-    "name": "NotArbiter",
     "inputs": []
   }
 ] as const;

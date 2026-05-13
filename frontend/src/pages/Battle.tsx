@@ -90,18 +90,7 @@ export default function Battle() {
     }
 
     setBarrierState([isBarrierUp(s, 0), isBarrierUp(s, 1)]);
-
-    const cu = ctrl.getCurrentUnit();
-    const isMine = cu ? cu.playerId === mySeat : false;
-    setMyTurn(isMine);
-    myTurnRef.current = isMine;
-
-    if (isMine && cu) {
-      setUI({ type: 'unit_turn' });
-      uiRef.current = { type: 'unit_turn' };
-      showActiveUnitHL();
-    }
-  }, [mySeat]);
+  }, []);
 
   const showActiveUnitHL = useCallback(() => {
     const ctrl = ctrlRef.current;
@@ -461,6 +450,23 @@ export default function Battle() {
         gameOverRef.current = true;
       },
       setMySeat,
+      setMyTurn: (turn: boolean) => {
+        setMyTurn(turn);
+        myTurnRef.current = turn;
+        if (turn) {
+          const cu = ctrlRef.current?.getCurrentUnit();
+          if (cu) {
+            setUI({ type: 'unit_turn' });
+            uiRef.current = { type: 'unit_turn' };
+            showActiveUnitHL();
+          } else {
+            setUI({ type: 'pick_card' });
+            uiRef.current = { type: 'pick_card' };
+          }
+        } else {
+          sceneRef.current?.clearHighlights();
+        }
+      },
       signTypedData: signTypedDataAsync,
     });
   }, [duelId, address, syncUI, resetTimer, signTypedDataAsync]);

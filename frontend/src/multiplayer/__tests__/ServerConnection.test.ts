@@ -127,9 +127,10 @@ describe('ServerConnection', () => {
         action: { type: 'pass' },
         events: [{ type: 'activation-changed', uid: null }],
         stateHash: 'abc',
+        controllingPlayer: 0,
       });
       expect(handler).toHaveBeenCalledWith(
-        1, { type: 'pass' }, [{ type: 'activation-changed', uid: null }], 'abc',
+        1, { type: 'pass' }, [{ type: 'activation-changed', uid: null }], 'abc', 0,
       );
     });
 
@@ -339,7 +340,7 @@ describe('ServerConnection', () => {
       expect(mockSignTypedData).toHaveBeenCalledOnce();
       const call = mockSignTypedData.mock.calls[0][0];
       expect(call.domain.name).toBe('Arcana Arena');
-      expect(call.domain.chainId).toBe(84532);
+      expect(call.domain.chainId).toBe(31337);
       expect(call.primaryType).toBe('Session');
       expect(call.message.duelId).toBe(BigInt(1));
       expect(call.message.player).toBe('0xTestAddr');

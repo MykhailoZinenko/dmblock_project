@@ -21,6 +21,7 @@ export interface AttachBattleMultiplayerInput {
   setMultiplayerStatus: (s: string) => void;
   setGameOver: (result: { winner: number }) => void;
   setMySeat: (seat: 0 | 1) => void;
+  setMyTurn: (turn: boolean) => void;
   signTypedData: (params: {
     domain: { name: string; chainId: number };
     types: Record<string, Array<{ name: string; type: string }>>;
@@ -56,21 +57,17 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     p.setMultiplayerStatus('Waiting for opponent...');
   });
 
-  conn.on('match-started', (state: SerializedGameState, seat: 0 | 1, opponent: string, seq: number) => {
+  conn.on('match-started', (state: SerializedGameState, seat: 0 | 1, _opponent: string, _seq: number, controllingPlayer: number) => {
     p.setMySeat(seat);
+    p.setMyTurn(controllingPlayer === seat);
     p.setMultiplayerStatus('Battle started!');
     setTimeout(() => p.setMultiplayerStatus(''), 2000);
 
-    // Initialize game controller from server snapshot
     const ctrl = p.getCtrl();
     if (!ctrl) return;
-    // For MP, the server owns the game state. The client uses GameController
-    // only for local display — we start it with the same seed as the server
-    // and trust the server's state. The controller is used for getControllingPlayer()
-    // and initiative queue display.
+
     ctrl.startGame(0, [state.players[0].hand, state.players[1].hand]);
 
-    // Overwrite client state from server snapshot
     const s = ctrl.getState();
     s.turnNumber = state.turnNumber;
     s.nextUnitUid = state.nextUnitUid;
@@ -80,20 +77,19 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     s.players[0].heroHp = state.players[0].heroHp;
     s.players[1].mana = state.players[1].mana;
     s.players[1].heroHp = state.players[1].heroHp;
-    // The hand/deck for our seat comes from the server; opponent's is hidden
     s.players[seat].hand = state.players[seat].hand;
     s.players[seat].deck = state.players[seat].deck;
 
     p.syncUI();
   });
 
-  conn.on('action-confirmed', (_seq: number, action: GameAction, events: MatchEvent[], _stateHash: string) => {
+  conn.on('action-confirmed', (_seq: number, _action: GameAction, events: MatchEvent[], _stateHash: string, controllingPlayer: number) => {
     const scene = p.getScene();
     const ctrl = p.getCtrl();
     if (!scene || !ctrl) return;
-    const state = ctrl.getState();
 
     applyEventsToScene(scene, ctrl, events, p);
+    p.setMyTurn(controllingPlayer === conn.seat);
   });
 
   conn.on('action-rejected', (_seq: number, reason: string) => {
