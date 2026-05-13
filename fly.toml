@@ -1,0 +1,24 @@
+app = "arcana-arena-server"
+primary_region = "fra"
+
+[build]
+  dockerfile = "server/Dockerfile"
+
+[env]
+  PORT = "3001"
+  CHAIN_ID = "11155111"
+  RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
+  DUEL_MANAGER_ADDRESS = "0x3e7DC4775031bD3CF9d2e97d99BD5F48Be54094B"
+  HERO_NFT_ADDRESS = "0x2FB7FA959EbaB2B6786B244a09e99CF72B37f297"
+
+[[services]]
+  internal_port = 3001
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]

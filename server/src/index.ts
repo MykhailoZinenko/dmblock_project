@@ -35,7 +35,7 @@ const httpServer = createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer });
-httpServer.listen(PORT);
+httpServer.listen(PORT, '0.0.0.0');
 
 type ClientState = { duelId: number | null; seat: 0 | 1 };
 const clients = new WeakMap<WebSocket, ClientState>();
@@ -348,4 +348,4 @@ setInterval(() => {
   }
 }, 60_000);
 
-console.log(`Match server listening on ws://localhost:${PORT}`);
+console.log(`Match server listening on 0.0.0.0:${PORT}`);
