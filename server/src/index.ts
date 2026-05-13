@@ -125,18 +125,14 @@ wss.on('connection', (ws) => {
 
         const player = room.players[seat]!;
 
-        // Reconnect path
-        if (room.runtime && room.runtime.phase === 'playing' && player.authenticated) {
-          if (room.disconnectTimers[seat]) {
-            clearTimeout(room.disconnectTimers[seat]!);
-            room.disconnectTimers[seat] = null;
-          }
-          send(ws, { type: 'state-snapshot', state: room.runtime.getSnapshotForSeat(seat), seq: room.runtime.seq });
-          const opp = getOpponent(room, seat);
-          if (opp?.ws) send(opp.ws, { type: 'opponent-reconnected' });
-          return;
+        // Cancel disconnect timer if reconnecting
+        if (room.disconnectTimers[seat]) {
+          clearTimeout(room.disconnectTimers[seat]!);
+          room.disconnectTimers[seat] = null;
         }
 
+        // Always require auth (client needs fresh session key after page refresh)
+        player.authenticated = false;
         send(ws, { type: 'auth-challenge', nonce });
         break;
       }
@@ -166,6 +162,18 @@ wss.on('connection', (ws) => {
             player.sessionKey = deriveSessionKey(msg.signature);
             player.sessionSignature = msg.signature;
             send(ws, { type: 'auth-ok', sessionStart: Date.now() });
+
+            // Reconnect: match already in progress → send snapshot
+            if (room.runtime && room.runtime.phase === 'playing') {
+              send(ws, {
+                type: 'state-snapshot',
+                state: room.runtime.getSnapshotForSeat(clientState.seat),
+                seq: room.runtime.seq,
+              });
+              const opp = getOpponent(room, clientState.seat);
+              if (opp?.ws) send(opp.ws, { type: 'opponent-reconnected' });
+              return;
+            }
             send(ws, { type: 'waiting-for-opponent' });
           })
           .catch(() => {

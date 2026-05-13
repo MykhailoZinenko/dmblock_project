@@ -10,9 +10,11 @@ import {
   checkWinCondition,
   hashState,
   TIMEOUT_DAMAGE,
-  getCard,
+  getCard, isMelee, isRanged, isBuilding,
+  hexNeighbors,
+  getOccupiedSet, getAutoWalkHex,
 } from '@arcana/game-core';
-import type { GameState, UnitInstance } from '@arcana/game-core';
+import type { GameState, UnitInstance, HexCoord } from '@arcana/game-core';
 import {
   serializeState, serializeStateForSeat,
   type GameAction, type MatchEvent, type SerializedGameState, type ActionLogEntry,
@@ -42,7 +44,6 @@ export class MatchRuntime {
   private turnPhase: TurnPhase = { type: 'priority', player: 0 };
   private priorityUsed: [boolean, boolean] = [false, false];
   private spawnedThisTurn = new Set<number>();
-  private activatedThisTurn = new Set<number>();
 
   constructor(duelId: number, address0: string, address1: string) {
     this.duelId = duelId;
@@ -56,21 +57,14 @@ export class MatchRuntime {
   get winner(): number | null { return this._winner; }
   get winReason(): string { return this._winReason; }
 
-  // --- Deck submission ---
-
   submitDeck(seat: 0 | 1, deck: number[]): void {
     if (this._phase !== 'waiting-for-decks') throw new Error('Not accepting decks');
     if (deck.length === 0) throw new Error('Deck is empty');
     for (const id of deck) {
-      if (!cardRegistry.find(c => c.id === id)) {
-        throw new Error(`Invalid card ID: ${id}`);
-      }
+      if (!cardRegistry.find(c => c.id === id)) throw new Error(`Invalid card ID: ${id}`);
     }
     this.decks[seat] = deck;
-
-    if (this.decks[0] && this.decks[1]) {
-      this.startGame();
-    }
+    if (this.decks[0] && this.decks[1]) this.startGame();
   }
 
   private startGame(): void {
@@ -80,106 +74,86 @@ export class MatchRuntime {
     this.advanceTurnPhase();
   }
 
-  // --- Turn phase management ---
-
-  private pendingAutoEndEvents: MatchEvent[] = [];
+  // ── Turn phase management ──
 
   private advanceTurnPhase(depth = 0): void {
     if (depth > 5) return;
     const state = this.ctrl.getState();
-    const p0Units = state.units.filter(u => u.alive && u.playerId === 0).length;
-    const p1Units = state.units.filter(u => u.alive && u.playerId === 1).length;
-    const p0Needs = p0Units === 0 && !this.priorityUsed[0];
-    const p1Needs = p1Units === 0 && !this.priorityUsed[1];
+    const p0Alive = state.units.filter(u => u.alive && u.playerId === 0).length;
+    const p1Alive = state.units.filter(u => u.alive && u.playerId === 1).length;
+    const p0Needs = p0Alive === 0 && !this.priorityUsed[0];
+    const p1Needs = p1Alive === 0 && !this.priorityUsed[1];
 
     if (p0Needs && p1Needs) {
-      const first = state.rng.rollPercent(50) ? 0 : 1;
-      this.turnPhase = { type: 'priority', player: first };
+      this.turnPhase = { type: 'priority', player: state.rng.rollPercent(50) ? 0 : 1 };
       return;
     }
-    if (p0Needs) {
-      this.turnPhase = { type: 'priority', player: 0 };
-      return;
-    }
-    if (p1Needs) {
-      this.turnPhase = { type: 'priority', player: 1 };
-      return;
-    }
+    if (p0Needs) { this.turnPhase = { type: 'priority', player: 0 }; return; }
+    if (p1Needs) { this.turnPhase = { type: 'priority', player: 1 }; return; }
 
     this.turnPhase = { type: 'initiative' };
 
-    if (this.spawnedThisTurn.size > 0 || this.activatedThisTurn.size > 0) {
-      const skipUids = new Set([...this.spawnedThisTurn, ...this.activatedThisTurn]);
-      state.activationQueue = state.activationQueue.filter(u => !skipUids.has(u.uid));
+    if (this.spawnedThisTurn.size > 0) {
+      const skip = this.spawnedThisTurn;
+      state.activationQueue = state.activationQueue.filter(u => !skip.has(u.uid));
       state.currentActivationIndex = 0;
     }
 
     if (this.ctrl.isQueueExhausted()) {
-      const stateBefore = this.ctrl.getState();
-      const effectsBefore = this.collectActiveEffects(stateBefore);
-
-      this.ctrl.endTurn();
-
-      const stateAfter = this.ctrl.getState();
-      const effectsAfter = this.collectActiveEffects(stateAfter);
-      this.emitEffectExpiryEvents(effectsBefore, effectsAfter, this.pendingAutoEndEvents);
-
-      this.pendingAutoEndEvents.push({ type: 'turn-changed', turnNumber: stateAfter.turnNumber });
-      this.pendingAutoEndEvents.push({ type: 'queue-rebuilt', queue: stateAfter.activationQueue.map(u => u.uid) });
-      for (const p of stateAfter.players) {
-        this.pendingAutoEndEvents.push({ type: 'mana-changed', playerId: p.id, mana: p.mana });
-      }
-
-      this.priorityUsed = [false, false];
-      this.spawnedThisTurn.clear();
-      this.activatedThisTurn.clear();
+      this.doEndTurnInternal();
       this.advanceTurnPhase(depth + 1);
     }
   }
 
-  /**
-   * Who is allowed to act right now.
-   * During priority phase: the priority player.
-   * During initiative: the owner of the current activation unit.
-   */
+  private doEndTurnInternal(): void {
+    this.ctrl.endTurn();
+    this.priorityUsed = [false, false];
+    this.spawnedThisTurn.clear();
+  }
+
+  private endActivation(events: MatchEvent[]): void {
+    this.ctrl.passActivation();
+    if (this.ctrl.isQueueExhausted()) {
+      this.doEndTurnInternal();
+      const s = this.ctrl.getState();
+      events.push({ type: 'turn-changed', turnNumber: s.turnNumber });
+      events.push({ type: 'queue-rebuilt', queue: s.activationQueue.map(u => u.uid) });
+      for (const p of s.players) {
+        events.push({ type: 'mana-changed', playerId: p.id, mana: p.mana });
+      }
+      this.advanceTurnPhase();
+    }
+    this.pushActivationEvent(events);
+  }
+
   getControllingPlayer(): number {
     if (!this.ctrl.isGameStarted()) return -1;
     if (this.turnPhase.type === 'priority') return this.turnPhase.player;
     return this.ctrl.getControllingPlayer();
   }
 
-  getTurnPhase(): TurnPhase {
-    return this.turnPhase;
-  }
+  getTurnPhase(): TurnPhase { return this.turnPhase; }
 
-  // --- Action execution ---
+  // ── Action execution ──
 
   executeAction(seat: number, action: GameAction, hmac = ''): ActionResult {
     if (this._phase !== 'playing') {
       return { ok: false, reason: 'Match not in playing phase', events: [], stateHash: '' };
     }
-
     const controlling = this.getControllingPlayer();
     if (controlling >= 0 && seat !== controlling) {
       return { ok: false, reason: 'not your turn', events: [], stateHash: '' };
     }
 
-    const state = this.ctrl.getState();
     const events: MatchEvent[] = [];
-
-    this.pendingAutoEndEvents = [];
     let result: { ok: boolean; reason?: string };
     try {
-      result = this.validateAndExecute(state, seat, action, events);
+      result = this.processAction(seat, action, events);
     } catch (err) {
       return { ok: false, reason: (err as Error).message, events: [], stateHash: '' };
     }
     if (!result.ok) {
       return { ok: false, reason: result.reason, events: [], stateHash: '' };
-    }
-    if (this.pendingAutoEndEvents.length > 0) {
-      events.push(...this.pendingAutoEndEvents);
-      this.pendingAutoEndEvents = [];
     }
 
     const winResult = this.checkWin();
@@ -190,23 +164,17 @@ export class MatchRuntime {
     }
 
     this._seq++;
-    this._actionLog.push({
-      seq: this._seq,
-      action,
-      hmac,
-      timestamp: Date.now(),
-    });
-
-    const stateHash = hashState(this.ctrl.getState());
-    return { ok: true, events, stateHash };
+    this._actionLog.push({ seq: this._seq, action, hmac, timestamp: Date.now() });
+    return { ok: true, events, stateHash: hashState(this.ctrl.getState()) };
   }
 
-  private validateAndExecute(
-    state: GameState,
+  private processAction(
     seat: number,
     action: GameAction,
     events: MatchEvent[],
   ): { ok: boolean; reason?: string } {
+    const state = this.ctrl.getState();
+
     switch (action.type) {
       case 'spawn': {
         if (action.playerId !== seat) return { ok: false, reason: 'Cannot spawn for other player' };
@@ -222,41 +190,57 @@ export class MatchRuntime {
           this.ctrl.rebuildQueue();
           this.advanceTurnPhase();
           events.push({ type: 'queue-rebuilt', queue: state.activationQueue.map(u => u.uid) });
+          this.pushActivationEvent(events);
         } else {
-          this.ctrl.passActivation();
+          this.endActivation(events);
         }
-        this.pushActivationEvent(events);
         return { ok: true };
       }
+
       case 'move': {
         if (this.turnPhase.type === 'priority') return { ok: false, reason: 'Cannot move during priority phase' };
         const check = canMove(state, action.unitUid, { col: action.col, row: action.row });
         if (!check.valid) return { ok: false, reason: check.reason ?? 'Cannot move here' };
         const path = executeMove(state, action.unitUid, { col: action.col, row: action.row });
         events.push({ type: 'unit-moved', uid: action.unitUid, path });
+        const unit = state.units.find(u => u.uid === action.unitUid);
+        if (unit && unit.remainingAp <= 0) {
+          this.endActivation(events);
+        }
         return { ok: true };
       }
+
       case 'attack': {
         if (this.turnPhase.type === 'priority') return { ok: false, reason: 'Cannot attack during priority phase' };
-        const check = canAttack(state, action.attackerUid, action.targetUid);
-        if (!check.valid) return { ok: false, reason: check.reason ?? 'Cannot attack' };
-        const target = state.units.find(u => u.uid === action.targetUid)!;
-        const attacker = state.units.find(u => u.uid === action.attackerUid)!;
-        const result = executeAttack(state, action.attackerUid, action.targetUid);
-        events.push({
-          type: 'unit-attacked',
-          attackerUid: action.attackerUid,
-          targetUid: action.targetUid,
-          damage: result.damage,
-          retaliation: result.retaliation?.damage ?? 0,
-          attackerHp: attacker.currentHp,
-          targetHp: target.currentHp,
-          crit: result.isCrit,
-        });
-        if (result.targetDied) events.push({ type: 'unit-died', uid: action.targetUid });
-        if (result.retaliation?.attackerDied) events.push({ type: 'unit-died', uid: action.attackerUid });
-        return { ok: true };
+        const attacker = state.units.find(u => u.uid === action.attackerUid);
+        const target = state.units.find(u => u.uid === action.targetUid);
+        if (!attacker || !target) return { ok: false, reason: 'Unit not found' };
+
+        // Direct attack
+        if (canAttack(state, action.attackerUid, action.targetUid).valid) {
+          this.doAttack(state, action.attackerUid, action.targetUid, events);
+          this.endActivation(events);
+          return { ok: true };
+        }
+
+        // Auto-walk + attack for melee
+        const card = getCard(attacker.cardId);
+        if (isMelee(card)) {
+          const walkHex = this.findAutoWalkHex(state, attacker, target);
+          if (walkHex) {
+            const path = executeMove(state, attacker.uid, walkHex);
+            events.push({ type: 'unit-moved', uid: attacker.uid, path });
+            if (canAttack(state, attacker.uid, target.uid).valid) {
+              this.doAttack(state, attacker.uid, target.uid, events);
+            }
+            this.endActivation(events);
+            return { ok: true };
+          }
+        }
+
+        return { ok: false, reason: 'Cannot attack target' };
       }
+
       case 'attack-hero': {
         if (this.turnPhase.type === 'priority') return { ok: false, reason: 'Cannot attack hero during priority phase' };
         const check = canAttackHero(state, action.attackerUid, action.targetPlayerId);
@@ -269,8 +253,10 @@ export class MatchRuntime {
           damage: result.damage,
           heroHp: state.players[action.targetPlayerId].heroHp,
         });
+        this.endActivation(events);
         return { ok: true };
       }
+
       case 'cast': {
         if (action.playerId !== seat) return { ok: false, reason: 'Cannot cast for other player' };
         const check = canCast(state, action.playerId, action.cardId, { col: action.col, row: action.row });
@@ -278,44 +264,35 @@ export class MatchRuntime {
         const card = getCard(action.cardId);
         const result = executeCast(state, action.playerId, action.cardId, { col: action.col, row: action.row });
         events.push({
-          type: 'spell-cast',
-          playerId: action.playerId,
-          cardId: action.cardId,
-          col: action.col, row: action.row,
+          type: 'spell-cast', playerId: action.playerId,
+          cardId: action.cardId, col: action.col, row: action.row,
         });
-        if (!result.success) {
-          events.push({ type: 'mana-changed', playerId: action.playerId, mana: state.players[action.playerId].mana });
-          if (this.turnPhase.type === 'priority') {
-            this.priorityUsed[seat as 0 | 1] = true;
-            this.advanceTurnPhase();
-            this.pushActivationEvent(events);
-          }
-          return { ok: true };
-        }
-        for (const affected of result.affectedUnits) {
-          if (affected.damage || affected.healed) {
-            const unit = state.units.find(u => u.uid === affected.uid);
-            if (unit) events.push({ type: 'hp-changed', uid: affected.uid, hp: unit.currentHp });
-          }
-          if (affected.statusApplied) {
-            events.push({
-              type: 'effect-applied', uid: affected.uid,
-              effectId: affected.statusApplied,
-              duration: card.duration,
-            });
-          }
-          if (affected.died) {
-            events.push({ type: 'unit-died', uid: affected.uid });
+        if (result.success) {
+          for (const affected of result.affectedUnits) {
+            if (affected.damage || affected.healed) {
+              const u = state.units.find(x => x.uid === affected.uid);
+              if (u) events.push({ type: 'hp-changed', uid: affected.uid, hp: u.currentHp });
+            }
+            if (affected.statusApplied) {
+              events.push({ type: 'effect-applied', uid: affected.uid, effectId: affected.statusApplied, duration: card.duration });
+            }
+            if (affected.died) {
+              events.push({ type: 'unit-died', uid: affected.uid });
+            }
           }
         }
         events.push({ type: 'mana-changed', playerId: action.playerId, mana: state.players[action.playerId].mana });
+
         if (this.turnPhase.type === 'priority') {
           this.priorityUsed[seat as 0 | 1] = true;
           this.advanceTurnPhase();
           this.pushActivationEvent(events);
+        } else {
+          this.endActivation(events);
         }
         return { ok: true };
       }
+
       case 'pass': {
         if (this.turnPhase.type === 'priority') {
           this.priorityUsed[seat as 0 | 1] = true;
@@ -323,73 +300,53 @@ export class MatchRuntime {
           this.pushActivationEvent(events);
           return { ok: true };
         }
-        this.ctrl.passActivation();
-        this.checkQueueExhaustedAndAdvance(events);
+        this.endActivation(events);
         return { ok: true };
       }
+
       case 'end-turn': {
         if (this.turnPhase.type === 'priority') return { ok: false, reason: 'Cannot end turn during priority phase' };
-        this.doEndTurn(events);
+        this.doEndTurnInternal();
+        const s = this.ctrl.getState();
+        events.push({ type: 'turn-changed', turnNumber: s.turnNumber });
+        events.push({ type: 'queue-rebuilt', queue: s.activationQueue.map(u => u.uid) });
+        for (const p of s.players) {
+          events.push({ type: 'mana-changed', playerId: p.id, mana: p.mana });
+        }
+        this.advanceTurnPhase();
+        this.pushActivationEvent(events);
         return { ok: true };
       }
+
       default:
         return { ok: false, reason: 'Unknown action type' };
     }
   }
 
-  private checkQueueExhaustedAndAdvance(events: MatchEvent[]): void {
-    if (this.ctrl.isQueueExhausted()) {
-      this.doEndTurn(events);
-    } else {
-      this.pushActivationEvent(events);
-    }
+  private doAttack(state: GameState, attackerUid: number, targetUid: number, events: MatchEvent[]): void {
+    const target = state.units.find(u => u.uid === targetUid)!;
+    const attacker = state.units.find(u => u.uid === attackerUid)!;
+    const result = executeAttack(state, attackerUid, targetUid);
+    events.push({
+      type: 'unit-attacked',
+      attackerUid, targetUid,
+      damage: result.damage,
+      retaliation: result.retaliation?.damage ?? 0,
+      attackerHp: attacker.currentHp,
+      targetHp: target.currentHp,
+      crit: result.isCrit,
+    });
+    if (result.targetDied) events.push({ type: 'unit-died', uid: targetUid });
+    if (result.retaliation?.attackerDied) events.push({ type: 'unit-died', uid: attackerUid });
   }
 
-  private doEndTurn(events: MatchEvent[]): void {
-    const stateBefore = this.ctrl.getState();
-    const effectsBefore = this.collectActiveEffects(stateBefore);
+  private findAutoWalkHex(state: GameState, attacker: UnitInstance, target: UnitInstance): HexCoord | null {
+    if (isBuilding(getCard(attacker.cardId)) || isRanged(getCard(attacker.cardId))) return null;
+    const moveBudget = attacker.remainingAp - 1;
+    if (moveBudget <= 0) return null;
 
-    this.ctrl.endTurn();
-
-    const stateAfter = this.ctrl.getState();
-    const effectsAfter = this.collectActiveEffects(stateAfter);
-    this.emitEffectExpiryEvents(effectsBefore, effectsAfter, events);
-
-    events.push({ type: 'turn-changed', turnNumber: stateAfter.turnNumber });
-    events.push({ type: 'queue-rebuilt', queue: stateAfter.activationQueue.map(u => u.uid) });
-    for (const p of stateAfter.players) {
-      events.push({ type: 'mana-changed', playerId: p.id, mana: p.mana });
-    }
-
-    this.priorityUsed = [false, false];
-    this.spawnedThisTurn.clear();
-    this.activatedThisTurn.clear();
-    this.advanceTurnPhase();
-    this.pushActivationEvent(events);
-  }
-
-  private collectActiveEffects(state: GameState): Map<string, { uid: number; effectId: string }> {
-    const effects = new Map<string, { uid: number; effectId: string }>();
-    for (const unit of state.units) {
-      if (!unit.alive || !unit.activeEffects) continue;
-      for (const effect of unit.activeEffects) {
-        const key = `${unit.uid}:${effect.type}`;
-        effects.set(key, { uid: unit.uid, effectId: effect.type });
-      }
-    }
-    return effects;
-  }
-
-  private emitEffectExpiryEvents(
-    before: Map<string, { uid: number; effectId: string }>,
-    after: Map<string, { uid: number; effectId: string }>,
-    events: MatchEvent[],
-  ): void {
-    for (const [key, { uid, effectId }] of before) {
-      if (!after.has(key)) {
-        events.push({ type: 'effect-expired', uid, effectId });
-      }
-    }
+    const center = { x: (attacker.col + target.col) / 2, y: (attacker.row + target.row) / 2 };
+    return getAutoWalkHex(state, attacker.uid, target.uid, center);
   }
 
   private pushActivationEvent(events: MatchEvent[]): void {
@@ -401,7 +358,7 @@ export class MatchRuntime {
     events.push({ type: 'activation-changed', uid: unit ? unit.uid : null });
   }
 
-  // --- Win detection ---
+  // ── Win / Timeout / Snapshots ──
 
   checkWin(): { winner: number; reason: string } | null {
     if (!this.ctrl.isGameStarted()) return null;
@@ -409,8 +366,6 @@ export class MatchRuntime {
     if (!result) return null;
     return { winner: result.winner, reason: 'Hero defeated' };
   }
-
-  // --- Timeout ---
 
   applyTimeout(): MatchEvent[] {
     const controlling = this.getControllingPlayer();
@@ -431,8 +386,7 @@ export class MatchRuntime {
       this.priorityUsed[controlling as 0 | 1] = true;
       this.advanceTurnPhase();
     } else {
-      this.ctrl.passActivation();
-      this.checkQueueExhaustedAndAdvance(events);
+      this.endActivation(events);
     }
     this.pushActivationEvent(events);
 
@@ -444,42 +398,20 @@ export class MatchRuntime {
     }
 
     this._seq++;
-    this._actionLog.push({
-      seq: this._seq,
-      action: { type: 'pass' },
-      hmac: 'timeout',
-      timestamp: Date.now(),
-    });
-
+    this._actionLog.push({ seq: this._seq, action: { type: 'pass' }, hmac: 'timeout', timestamp: Date.now() });
     return events;
   }
 
-  // --- Snapshots ---
-
-  getSnapshot(): SerializedGameState {
-    return serializeState(this.ctrl.getState());
-  }
-
-  getSnapshotForSeat(seat: 0 | 1): SerializedGameState {
-    return serializeStateForSeat(this.ctrl.getState(), seat);
-  }
-
-  // --- Forfeit (disconnect) ---
+  getSnapshot(): SerializedGameState { return serializeState(this.ctrl.getState()); }
+  getSnapshotForSeat(seat: 0 | 1): SerializedGameState { return serializeStateForSeat(this.ctrl.getState(), seat); }
 
   forfeit(losingSeat: 0 | 1): void {
-    const winningSeat = losingSeat === 0 ? 1 : 0;
     this._phase = 'game-over';
-    this._winner = winningSeat;
+    this._winner = losingSeat === 0 ? 1 : 0;
     this._winReason = 'opponent disconnected';
   }
 
-  // --- Test helpers ---
-
-  getStateForTest(): GameState {
-    return this.ctrl.getState();
-  }
-
-  // --- Utilities ---
+  getStateForTest(): GameState { return this.ctrl.getState(); }
 
   private duelIdToSeed(duelId: number): number {
     const str = String(duelId);
