@@ -4,7 +4,7 @@ import type { MatchEvent, SerializedGameState, GameAction } from '../../multipla
 import { listDecks } from '../../lib/deckStorage';
 import { DECK_SIZE } from '../../lib/deckValidation';
 import { HERO_HP } from '@arcana/game-core';
-import type { GameController, GameState } from '@arcana/game-core';
+import type { GameController, GameState, UnitInstance } from '@arcana/game-core';
 import type { BattleScene } from '../../game/BattleScene';
 
 export interface AttachBattleMultiplayerInput {
@@ -135,32 +135,41 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
 // ── Play animations from events (visuals only, no state mutation) ──
 
 function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEvent[]): void {
-  for (const event of events) {
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
     switch (event.type) {
       case 'unit-spawned':
         scene.spawnUnit(event.unit);
         break;
 
-      case 'unit-moved':
-        if (event.path.length >= 2) {
+      case 'unit-moved': {
+        const nextEvent = events[i + 1];
+        const isAutoWalk = nextEvent?.type === 'unit-attacked' &&
+          (nextEvent as any).attackerUid === event.uid;
+
+        if (isAutoWalk) {
+          i++;
+          const atkEvent = nextEvent as Extract<MatchEvent, { type: 'unit-attacked' }>;
+          const target = state.units.find(u => u.uid === atkEvent.targetUid);
+          const attacker = state.units.find(u => u.uid === atkEvent.attackerUid);
+          if (event.path.length >= 2) {
+            scene.moveUnit(event.uid, event.path, () => {
+              if (attacker && target) {
+                playAttackWithRetaliation(scene, atkEvent, attacker, target);
+              }
+            });
+          }
+        } else if (event.path.length >= 2) {
           scene.moveUnit(event.uid, event.path, () => {});
         }
         break;
+      }
 
       case 'unit-attacked': {
         const target = state.units.find(u => u.uid === event.targetUid);
         const attacker = state.units.find(u => u.uid === event.attackerUid);
         if (attacker && target) {
-          scene.playAttack(attacker.uid, { col: target.col, row: target.row }, () => {
-            scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
-            scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
-            if (event.retaliation > 0) {
-              scene.playAttack(target.uid, { col: attacker.col, row: attacker.row }, () => {
-                scene.updateHpBar(attacker.uid, event.attackerHp, attacker.maxHp);
-                scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
-              });
-            }
-          });
+          playAttackWithRetaliation(scene, event, attacker, target);
         }
         break;
       }
@@ -206,6 +215,24 @@ function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEv
     }
   }
   scene.clearHighlights();
+}
+
+function playAttackWithRetaliation(
+  scene: BattleScene,
+  event: Extract<MatchEvent, { type: 'unit-attacked' }>,
+  attacker: UnitInstance,
+  target: UnitInstance,
+): void {
+  scene.playAttack(attacker.uid, { col: target.col, row: target.row }, () => {
+    scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
+    scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
+    if (event.retaliation > 0) {
+      scene.playAttack(target.uid, { col: attacker.col, row: attacker.row }, () => {
+        scene.updateHpBar(attacker.uid, event.attackerHp, attacker.maxHp);
+        scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
+      });
+    }
+  });
 }
 
 // ── Replace local state with server snapshot ──
