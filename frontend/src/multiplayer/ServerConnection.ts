@@ -23,6 +23,7 @@ type EventMap = {
   'game-over': [winner: number, reason: string, results: any];
   'waiting-for-opponent': [];
   'sign-request': [duelId: number, winner: string];
+  'duel-settled': [txHash: string];
   'action-log': [sessionSignatures: [string, string], actions: ActionLogEntry[]];
   'opponent-disconnected': [];
   'opponent-reconnected': [];
@@ -56,8 +57,11 @@ export class ServerConnection {
   private sessionKey: CryptoKey | null = null;
   private readonly duelId: number;
   private readonly address: string;
+  private reconnectAttempts = 0;
+  private url: string;
 
   constructor(url: string, duelId: number, address: string) {
+    this.url = url;
     this.duelId = duelId;
     this.address = address;
     this.connect(url);
@@ -69,6 +73,7 @@ export class ServerConnection {
   private connect(url: string): void {
     this.ws = new WebSocket(url);
     this.ws.onopen = () => {
+      this.reconnectAttempts = 0;
       this.sendRaw({ type: 'join', duelId: this.duelId, address: this.address });
     };
     this.ws.onmessage = (event) => {
@@ -77,13 +82,14 @@ export class ServerConnection {
       this.handleMessage(msg);
     };
     this.ws.onclose = () => {
-      if (this._state !== 'game-over') {
-        this.setState('disconnected');
+      if (this._state === 'game-over') return;
+      this.setState('disconnected');
+      if (this.reconnectAttempts < 3) {
+        this.reconnectAttempts++;
+        setTimeout(() => this.connect(this.url), 2000);
       }
     };
-    this.ws.onerror = () => {
-      this.emit('error', 'WebSocket connection error');
-    };
+    this.ws.onerror = () => {};
   }
 
   private handleMessage(msg: ServerMessage): void {
@@ -122,6 +128,9 @@ export class ServerConnection {
         break;
       case 'sign-request':
         this.emit('sign-request', msg.duelId, msg.winner);
+        break;
+      case 'duel-settled':
+        this.emit('duel-settled', (msg as any).txHash);
         break;
       case 'action-log':
         this.emit('action-log', msg.sessionSignatures, msg.actions);

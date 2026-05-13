@@ -90,7 +90,7 @@ function startActivationTimer(room: Room): void {
   }, ACTIVATION_TIMER_SECONDS * 1000);
 }
 
-const ARBITER_SETTLE_TIMEOUT_MS = 60_000;
+const ARBITER_SETTLE_TIMEOUT_MS = 15_000;
 
 function handleGameOver(room: Room): void {
   if (!room.runtime) return;

@@ -60,6 +60,9 @@ export default function Battle() {
   const [timer, setTimer] = useState(ACTIVATION_TIMER_SECONDS);
   const [gameOver, setGameOver] = useState<{ winner: number; results?: any } | null>(null);
   const [barrierState, setBarrierState] = useState([true, true]);
+  const [settled, setSettled] = useState(false);
+  const [settlementPending, setSettlementPending] = useState(false);
+  const pendingSignRef = useRef<{ duelId: number; winner: string } | null>(null);
   const [myTurn, setMyTurn] = useState(false);
 
   const uiRef = useRef(ui); uiRef.current = ui;
@@ -472,6 +475,8 @@ export default function Battle() {
         account: walletClient.account,
         message: { raw: message },
       }),
+      setSettled,
+      pendingSignRef,
     });
   }, [duelId, address, walletClient, syncUI, resetTimer]);
 
@@ -720,10 +725,37 @@ export default function Battle() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                  <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
-                    Return to Lobby
-                  </ArcanaButton>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+                  {!settled && pendingSignRef.current && !settlementPending && (
+                    <ArcanaButton variant="blue" size="md" onClick={async () => {
+                      const ps = pendingSignRef.current;
+                      if (!ps || !walletClient) return;
+                      setSettlementPending(true);
+                      try {
+                        const { keccak256, encodePacked, toBytes } = await import('viem');
+                        const hash = keccak256(encodePacked(['uint256', 'address'], [BigInt(ps.duelId), ps.winner as `0x${string}`]));
+                        const sig = await walletClient.signMessage({ account: walletClient.account, message: { raw: toBytes(hash) } });
+                        serverRef.current?.sendSignResult(ps.duelId, ps.winner, sig);
+                      } catch {
+                        setSettlementPending(false);
+                      }
+                    }}>
+                      Sign Settlement
+                    </ArcanaButton>
+                  )}
+                  {settlementPending && !settled && (
+                    <div style={{ fontSize: 'var(--text-sm)', opacity: 0.7 }}>Waiting for opponent to sign...</div>
+                  )}
+                  {settled && (
+                    <div style={{ fontSize: 'var(--text-sm)', color: '#66ff66', marginBottom: 8 }}>
+                      Duel settled on-chain
+                    </div>
+                  )}
+                  {settled && (
+                    <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
+                      Return to Lobby
+                    </ArcanaButton>
+                  )}
                 </div>
               </div>
             </ArcanaPanel>

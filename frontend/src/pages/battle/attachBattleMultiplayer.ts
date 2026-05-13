@@ -27,6 +27,8 @@ export interface AttachBattleMultiplayerInput {
     message: Record<string, unknown>;
   }) => Promise<`0x${string}`>;
   signMessage: (message: Uint8Array) => Promise<`0x${string}`>;
+  setSettled: (v: boolean) => void;
+  pendingSignRef: { current: { duelId: number; winner: string } | null };
 }
 
 export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => void {
@@ -120,16 +122,11 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     p.setMultiplayerStatus('Opponent reconnected!');
     setTimeout(() => p.setMultiplayerStatus(''), 2000);
   });
-  conn.on('sign-request', async (duelId, winner) => {
-    try {
-      const { keccak256, encodePacked, toBytes } = await import('viem');
-      const messageHash = keccak256(encodePacked(['uint256', 'address'], [BigInt(duelId), winner as `0x${string}`]));
-      const signature = await p.signMessage(toBytes(messageHash));
-      conn.sendSignResult(duelId, winner, signature);
-      console.log('Settlement signed');
-    } catch (err) {
-      console.error('Settlement signing failed:', err);
-    }
+  conn.on('sign-request', (_duelId, winner) => {
+    p.pendingSignRef.current = { duelId: _duelId, winner };
+  });
+  conn.on('duel-settled', () => {
+    p.setSettled(true);
   });
   conn.on('error', (message) => {
     p.setMultiplayerStatus(`Error: ${message}`);
