@@ -101,6 +101,7 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     console.warn('Action rejected:', reason);
     p.setMultiplayerStatus(`Rejected: ${reason}`);
     setTimeout(() => p.setMultiplayerStatus(''), 3000);
+    p.setMyTurn(true);
   });
 
   conn.on('turn-timeout', (player: number, damage: number) => {

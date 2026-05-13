@@ -49,6 +49,7 @@ export default function Battle() {
   const serverRef = useRef<ServerConnection | null>(null);
   const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
   const [mySeat, setMySeat] = useState<0 | 1>(0);
+  const pendingAttackRef = useRef<{ attackerUid: number; targetUid: number } | null>(null);
 
   const [ui, setUI] = useState<UIMode>({ type: 'pick_card' });
   const [mana, setMana] = useState([STARTING_MANA, STARTING_MANA]);
@@ -271,8 +272,8 @@ export default function Battle() {
         if (isMelee(card)) {
           const walkHex = getAutoWalkHex(state, cu.uid, targetUnit.uid, { x: worldX, y: worldY });
           if (walkHex) {
+            pendingAttackRef.current = { attackerUid: cu.uid, targetUid: targetUnit.uid };
             sendAction({ type: 'move', unitUid: cu.uid, col: walkHex.col, row: walkHex.row });
-            // Attack will be sent after server confirms move and client re-evaluates
             return;
           }
         }
@@ -455,6 +456,13 @@ export default function Battle() {
         setMyTurn(turn);
         myTurnRef.current = turn;
         if (turn) {
+          // Fire pending auto-walk attack if one was queued
+          const pending = pendingAttackRef.current;
+          if (pending) {
+            pendingAttackRef.current = null;
+            sendAction({ type: 'attack', attackerUid: pending.attackerUid, targetUid: pending.targetUid });
+            return;
+          }
           const cu = ctrlRef.current?.getCurrentUnit();
           if (cu) {
             setUI({ type: 'unit_turn' });
@@ -465,6 +473,7 @@ export default function Battle() {
             uiRef.current = { type: 'pick_card' };
           }
         } else {
+          pendingAttackRef.current = null;
           sceneRef.current?.clearHighlights();
         }
       },
