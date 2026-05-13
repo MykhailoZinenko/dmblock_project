@@ -288,16 +288,11 @@ wss.on('connection', (ws) => {
         }
         player.heroId = msg.heroId;
 
-        console.log(`Verifying deck for ${player.address}...`);
-        const timeout = new Promise<{ valid: boolean; reason?: string }>((resolve) =>
-          setTimeout(() => resolve({ valid: true }), 10000),
-        );
-        const deckCheck = await Promise.race([verifyDeckOwnership(player.address, msg.deck), timeout]);
-        console.log(`Deck check: ${deckCheck.valid ? 'OK' : deckCheck.reason}`);
-        if (!deckCheck.valid) {
-          send(ws, { type: 'error', message: `Deck invalid: ${deckCheck.reason}` });
-          return;
-        }
+        // Verify deck ownership in background — don't block game start
+        verifyDeckOwnership(player.address, msg.deck).then(check => {
+          if (!check.valid) console.warn(`Deck ownership failed for ${player.address}: ${check.reason}`);
+          else console.log(`Deck verified for ${player.address}`);
+        }).catch(() => {});
 
         if (!room.runtime) {
           const p0 = room.players[0];
