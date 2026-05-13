@@ -7,7 +7,7 @@ export const config = createConfig({
   connectors: [injected()],
   transports: {
     [foundry.id]: http("http://127.0.0.1:8545"),
-    [sepolia.id]: http("https://ethereum-sepolia-rpc.publicnode.com"),
+    [sepolia.id]: http(import.meta.env.VITE_SEPOLIA_RPC || "https://ethereum-sepolia-rpc.publicnode.com"),
   },
 });
 

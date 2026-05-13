@@ -7,7 +7,7 @@ primary_region = "fra"
 [env]
   PORT = "3001"
   CHAIN_ID = "11155111"
-  RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
+  # RPC_URL set via fly secrets
   DUEL_MANAGER_ADDRESS = "0x3e7DC4775031bD3CF9d2e97d99BD5F48Be54094B"
   HERO_NFT_ADDRESS = "0x2FB7FA959EbaB2B6786B244a09e99CF72B37f297"
   CARD_NFT_ADDRESS = "0xa4616f3f5b1fa4B8B895727c878C6Cf524e25afD"
