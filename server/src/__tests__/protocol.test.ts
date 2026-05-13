@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serializeState, canonicalizeAction } from '../protocol.js';
+import { serializeState, serializeStateForSeat, canonicalizeAction } from '../protocol.js';
 import { createGameState, GameController } from '@arcana/game-core';
 
 describe('serializeState', () => {
@@ -39,6 +39,52 @@ describe('serializeState', () => {
     expect(parsed.phase).toBe(serialized.phase);
     expect(parsed.players[0].mana).toBe(serialized.players[0].mana);
     expect(parsed.board.length).toBe(serialized.board.length);
+  });
+});
+
+describe('serializeStateForSeat', () => {
+  it('hides opponent hand and deck', () => {
+    const state = createGameState(42, [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]]);
+    const forSeat0 = serializeStateForSeat(state, 0);
+    const forSeat1 = serializeStateForSeat(state, 1);
+
+    // Seat 0 sees own hand, not opponent's
+    expect(forSeat0.players[0].hand.length).toBeGreaterThan(0);
+    expect(forSeat0.players[0].deck.length).toBeGreaterThanOrEqual(0);
+    expect(forSeat0.players[1].hand).toEqual([]);
+    expect(forSeat0.players[1].deck).toEqual([]);
+
+    // Seat 1 sees own hand, not opponent's
+    expect(forSeat1.players[1].hand.length).toBeGreaterThan(0);
+    expect(forSeat1.players[0].hand).toEqual([]);
+    expect(forSeat1.players[0].deck).toEqual([]);
+  });
+
+  it('hides RNG state', () => {
+    const state = createGameState(42, [[0, 1, 2], [3, 4, 5]]);
+    const forSeat0 = serializeStateForSeat(state, 0);
+    expect(forSeat0.rngState).toBe(0);
+  });
+
+  it('preserves shared state (board, units, turn, mana, heroHp)', () => {
+    const state = createGameState(42, [[0, 1, 2], [3, 4, 5]]);
+    const full = serializeState(state);
+    const forSeat0 = serializeStateForSeat(state, 0);
+
+    expect(forSeat0.board).toEqual(full.board);
+    expect(forSeat0.units).toEqual(full.units);
+    expect(forSeat0.turnNumber).toBe(full.turnNumber);
+    expect(forSeat0.players[0].mana).toBe(full.players[0].mana);
+    expect(forSeat0.players[1].mana).toBe(full.players[1].mana);
+    expect(forSeat0.players[0].heroHp).toBe(full.players[0].heroHp);
+    expect(forSeat0.players[1].heroHp).toBe(full.players[1].heroHp);
+  });
+
+  it('does not mutate the original state', () => {
+    const state = createGameState(42, [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]]);
+    const handBefore = [...state.players[1].hand];
+    serializeStateForSeat(state, 0);
+    expect(state.players[1].hand).toEqual(handBefore);
   });
 });
 

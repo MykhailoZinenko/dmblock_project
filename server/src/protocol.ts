@@ -82,6 +82,10 @@ export interface ActionLogEntry {
 
 // --- Serialization helpers ---
 
+/**
+ * Serialize full state (server-internal use, tests, reconnect verification).
+ * Never send this directly to a client — use serializeStateForSeat instead.
+ */
 export function serializeState(state: GameState): SerializedGameState {
   return {
     players: state.players,
@@ -92,6 +96,39 @@ export function serializeState(state: GameState): SerializedGameState {
     currentActivationIndex: state.currentActivationIndex,
     phase: state.phase,
     rngState: state.rng.serialize(),
+    nextUnitUid: state.nextUnitUid,
+  };
+}
+
+/**
+ * Serialize state for a specific player seat.
+ * Hides opponent's hand, deck, and RNG state.
+ */
+export function serializeStateForSeat(state: GameState, seat: 0 | 1): SerializedGameState {
+  const opponentSeat = seat === 0 ? 1 : 0;
+  const players = state.players.map((p, i) => {
+    if (i === opponentSeat) {
+      return {
+        id: p.id,
+        mana: p.mana,
+        heroHp: p.heroHp,
+        timeoutCount: p.timeoutCount,
+        deck: [] as number[],
+        hand: [] as number[],
+      };
+    }
+    return { ...p };
+  }) as GameState['players'];
+
+  return {
+    players,
+    units: state.units,
+    board: state.board,
+    turnNumber: state.turnNumber,
+    activationQueue: state.activationQueue.map(u => u.uid),
+    currentActivationIndex: state.currentActivationIndex,
+    phase: state.phase,
+    rngState: 0,
     nextUnitUid: state.nextUnitUid,
   };
 }

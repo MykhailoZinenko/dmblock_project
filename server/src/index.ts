@@ -75,14 +75,13 @@ function handleGameOver(room: Room): void {
 
 function tryStartMatch(room: Room): void {
   if (!room.runtime || room.runtime.phase !== 'playing') return;
-  const snapshot = room.runtime.getSnapshot();
   for (const p of room.players) {
     if (p?.ws) {
       send(p.ws, {
         type: 'match-started',
         seat: p.seat,
         opponent: room.players[p.seat === 0 ? 1 : 0]?.address ?? '',
-        state: snapshot,
+        state: room.runtime.getSnapshotForSeat(p.seat),
         seq: room.runtime.seq,
       });
     }
@@ -119,7 +118,7 @@ wss.on('connection', (ws) => {
             clearTimeout(room.disconnectTimers[seat]!);
             room.disconnectTimers[seat] = null;
           }
-          send(ws, { type: 'state-snapshot', state: room.runtime.getSnapshot(), seq: room.runtime.seq });
+          send(ws, { type: 'state-snapshot', state: room.runtime.getSnapshotForSeat(seat), seq: room.runtime.seq });
           const opp = getOpponent(room, seat);
           if (opp?.ws) send(opp.ws, { type: 'opponent-reconnected' });
           return;

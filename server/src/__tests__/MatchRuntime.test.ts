@@ -93,12 +93,33 @@ describe('MatchRuntime', () => {
       expect(result.events.some(e => e.type === 'activation-changed')).toBe(true);
     });
 
-    it('accepts end-turn', () => {
+    it('accepts end-turn during initiative phase', () => {
+      // Pass through all activations to reach queue exhaustion, which triggers end-turn internally
+      // Or just pass until we're in initiative phase
+      let safety = 0;
+      while (runtime.getTurnPhase().type === 'priority' && safety < 10) {
+        runtime.executeAction(runtime.getControllingPlayer(), { type: 'pass' });
+        safety++;
+      }
       const result = runtime.executeAction(runtime.getControllingPlayer(), { type: 'end-turn' });
       expect(result.ok).toBe(true);
       expect(result.events.some(e => e.type === 'turn-changed')).toBe(true);
       expect(result.events.some(e => e.type === 'queue-rebuilt')).toBe(true);
       expect(result.events.some(e => e.type === 'mana-changed')).toBe(true);
+    });
+
+    it('rejects end-turn during priority phase', () => {
+      // At start with units spawned, we're in priority or initiative
+      // Create a fresh runtime with no units to test priority
+      const rt = new MatchRuntime(99, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+      // No units spawned, should be in priority phase
+      if (rt.getTurnPhase().type === 'priority') {
+        const result = rt.executeAction(rt.getControllingPlayer(), { type: 'end-turn' });
+        expect(result.ok).toBe(false);
+        expect(result.reason).toContain('priority');
+      }
     });
 
     it('increments seq on successful action', () => {
@@ -239,8 +260,9 @@ describe('MatchRuntime', () => {
     it('transitions to game-over phase on win after action', () => {
       const state = runtime.getStateForTest();
       state.players[0].heroHp = 0;
-      // Any action triggers win check
-      runtime.executeAction(0, { type: 'end-turn' });
+      // Any action triggers win check — use pass which is always valid
+      const controlling = runtime.getControllingPlayer();
+      runtime.executeAction(controlling, { type: 'pass' });
       expect(runtime.phase).toBe('game-over');
       expect(runtime.winner).toBe(1);
     });
@@ -281,13 +303,17 @@ describe('MatchRuntime', () => {
       expect(runtime.winReason).toBe('timeout');
     });
 
-    it('returns empty events when no controlling player', () => {
+    it('applies timeout during priority phase', () => {
       const rt = new MatchRuntime(99, '0xA', '0xB');
       rt.submitDeck(0, validDeck());
       rt.submitDeck(1, validDeck());
-      // No units spawned, controlling player = -1
+      // No units spawned — should be in priority phase
+      expect(rt.getTurnPhase().type).toBe('priority');
+      const controlling = rt.getControllingPlayer();
+      const hpBefore = rt.getStateForTest().players[controlling].heroHp;
       const events = rt.applyTimeout();
-      expect(events).toEqual([]);
+      expect(events.some(e => e.type === 'hero-hp-changed')).toBe(true);
+      expect(rt.getStateForTest().players[controlling].heroHp).toBeLessThan(hpBefore);
     });
   });
 
@@ -309,6 +335,121 @@ describe('MatchRuntime', () => {
     it('works for either seat', () => {
       runtime.forfeit(1);
       expect(runtime.winner).toBe(0);
+    });
+  });
+
+  // --- Priority phase ---
+
+  describe('priority phase', () => {
+    it('starts in priority phase when no units on board', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+      expect(rt.getTurnPhase().type).toBe('priority');
+    });
+
+    it('transitions to initiative after both players spawn or pass', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+
+      // Both pass priority
+      const first = rt.getControllingPlayer();
+      rt.executeAction(first, { type: 'pass' });
+      const second = rt.getControllingPlayer();
+      rt.executeAction(second, { type: 'pass' });
+
+      expect(rt.getTurnPhase().type).toBe('initiative');
+    });
+
+    it('rejects move/attack/cast during priority phase', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+      const cp = rt.getControllingPlayer();
+
+      expect(rt.executeAction(cp, { type: 'move', unitUid: 1, col: 5, row: 5 }).ok).toBe(false);
+      expect(rt.executeAction(cp, { type: 'attack', attackerUid: 1, targetUid: 2 }).ok).toBe(false);
+      expect(rt.executeAction(cp, { type: 'attack-hero', attackerUid: 1, targetPlayerId: 1 }).ok).toBe(false);
+      expect(rt.executeAction(cp, { type: 'cast', playerId: cp, cardId: 10, col: 5, row: 5 }).ok).toBe(false);
+      expect(rt.executeAction(cp, { type: 'end-turn' }).ok).toBe(false);
+    });
+
+    it('spawning during priority rebuilds queue', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+
+      const cp = rt.getControllingPlayer();
+      const state = rt.getStateForTest();
+      state.players[cp].mana = 99;
+      // Find a unit card in hand (hand may contain spells)
+      const unitCardId = state.players[cp].hand.find(id => {
+        const c = cardRegistry.find(x => x.id === id);
+        return c && c.cardType === CardType.UNIT;
+      });
+      if (unitCardId === undefined) {
+        // Force a unit card into hand
+        const unitCard = cardRegistry.find(c => c.cardType === CardType.UNIT)!;
+        state.players[cp].hand.push(unitCard.id);
+      }
+      const cardId = unitCardId ?? cardRegistry.find(c => c.cardType === CardType.UNIT)!.id;
+      const col = cp === 0 ? 0 : 14;
+
+      const result = rt.executeAction(cp, {
+        type: 'spawn', playerId: cp, cardId, col, row: 0,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.events.some(e => e.type === 'queue-rebuilt')).toBe(true);
+    });
+
+    it('prevents spawning for the other player', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+      const cp = rt.getControllingPlayer();
+      const other = cp === 0 ? 1 : 0;
+
+      const result = rt.executeAction(cp, {
+        type: 'spawn', playerId: other, cardId: 0, col: 0, row: 0,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.reason).toContain('other player');
+    });
+  });
+
+  // --- Per-seat snapshots ---
+
+  describe('per-seat snapshots', () => {
+    beforeEach(() => {
+      runtime.submitDeck(0, validDeck());
+      runtime.submitDeck(1, validDeck());
+    });
+
+    it('hides opponent hand and deck from each seat', () => {
+      const snap0 = runtime.getSnapshotForSeat(0);
+      const snap1 = runtime.getSnapshotForSeat(1);
+
+      // Seat 0 doesn't see seat 1's cards
+      expect(snap0.players[1].hand).toEqual([]);
+      expect(snap0.players[1].deck).toEqual([]);
+      // Seat 1 doesn't see seat 0's cards
+      expect(snap1.players[0].hand).toEqual([]);
+      expect(snap1.players[0].deck).toEqual([]);
+    });
+
+    it('each seat sees their own hand', () => {
+      const snap0 = runtime.getSnapshotForSeat(0);
+      const snap1 = runtime.getSnapshotForSeat(1);
+      const full = runtime.getSnapshot();
+
+      expect(snap0.players[0].hand).toEqual(full.players[0].hand);
+      expect(snap1.players[1].hand).toEqual(full.players[1].hand);
+    });
+
+    it('hides RNG state', () => {
+      const snap = runtime.getSnapshotForSeat(0);
+      expect(snap.rngState).toBe(0);
     });
   });
 
