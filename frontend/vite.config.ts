@@ -1,9 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@server/protocol': path.resolve(__dirname, '../server/src/protocol.ts'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
