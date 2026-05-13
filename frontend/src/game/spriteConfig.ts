@@ -64,7 +64,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 0: Peasant — separate strip files, 192×192 frames
   0: {
     cardId: 0,
-    basePath: 'assets/units/blue/pawn_v1',
+    basePath: '/assets/units/blue/pawn_v1',
     defaultState: 'idle',
     anims: [
       { state: 'idle',         source: 'strip', file: 'pawn_idle_axe.png',     frameWidth: 192, frameHeight: 192, frameCount: 8, loop: true },
@@ -79,7 +79,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 1: Militiaman — grid sprite, 192×192 frames, 6 cols
   1: {
     cardId: 1,
-    basePath: 'assets/units/blue/pawn',
+    basePath: '/assets/units/blue/pawn',
     defaultState: 'idle',
     anims: [
       { state: 'idle',         source: 'grid', file: 'pawn.png', frameWidth: 192, frameHeight: 192, frameCount: 6, row: 1, loop: true },
@@ -91,7 +91,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 2: Archer — separate strip files, 192×192 frames
   2: {
     cardId: 2,
-    basePath: 'assets/units/blue/archer_v1',
+    basePath: '/assets/units/blue/archer_v1',
     defaultState: 'idle',
     anims: [
       { state: 'idle',  source: 'strip', file: 'archer_idle.png',  frameWidth: 192, frameHeight: 192, frameCount: 6, loop: true },
@@ -103,7 +103,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 3: Sniper — grid sprite, 192×192 frames, 8 cols
   3: {
     cardId: 3,
-    basePath: 'assets/units/blue/archer',
+    basePath: '/assets/units/blue/archer',
     defaultState: 'idle',
     anims: [
       { state: 'idle',              source: 'grid', file: 'archer.png', frameWidth: 192, frameHeight: 192, frameCount: 6, row: 1, loop: true },
@@ -119,7 +119,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 4: Spearman — separate strip files, 320×320 frames
   4: {
     cardId: 4,
-    basePath: 'assets/units/blue/lancer',
+    basePath: '/assets/units/blue/lancer',
     defaultState: 'idle',
     anims: [
       { state: 'idle',              source: 'strip', file: 'lancer_idle.png',             frameWidth: 320, frameHeight: 320, frameCount: 12, loop: true },
@@ -136,7 +136,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 5: Knight — grid sprite, 192×192 frames, 6 cols
   5: {
     cardId: 5,
-    basePath: 'assets/units/blue/warrior',
+    basePath: '/assets/units/blue/warrior',
     defaultState: 'idle',
     anims: [
       { state: 'idle',         source: 'grid', file: 'warrior.png', frameWidth: 192, frameHeight: 192, frameCount: 6, row: 1, loop: true },
@@ -152,7 +152,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 6: Monk — separate strip files, 192×192 frames
   6: {
     cardId: 6,
-    basePath: 'assets/units/blue/monk_v1',
+    basePath: '/assets/units/blue/monk_v1',
     defaultState: 'idle',
     anims: [
       { state: 'idle',        source: 'strip', file: 'idle.png',        frameWidth: 192, frameHeight: 192, frameCount: 6,  loop: true },
@@ -166,7 +166,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 7: Torchbearer — grid sprite, 192×192 frames, 7 cols max
   7: {
     cardId: 7,
-    basePath: 'assets/units/goblins/torch',
+    basePath: '/assets/units/goblins/torch',
     defaultState: 'idle',
     anims: [
       { state: 'idle',          source: 'grid', file: 'torch_blue.png', frameWidth: 192, frameHeight: 192, frameCount: 7, row: 1, loop: true },
@@ -180,7 +180,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 8: Pyro-Goblin — grid sprite, 192×192 frames
   8: {
     cardId: 8,
-    basePath: 'assets/units/goblins/tnt',
+    basePath: '/assets/units/goblins/tnt',
     defaultState: 'idle',
     anims: [
       { state: 'idle',  source: 'grid', file: 'tnt_blue.png', frameWidth: 192, frameHeight: 192, frameCount: 6, row: 1, loop: true },
@@ -192,7 +192,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
   // 9: Demolitionist — grid sprite, 128×128 frames
   9: {
     cardId: 9,
-    basePath: 'assets/units/goblins/barrel',
+    basePath: '/assets/units/goblins/barrel',
     defaultState: 'idle',
     anims: [
       { state: 'idle',      source: 'grid', file: 'barrel_blue.png', frameWidth: 128, frameHeight: 128, frameCount: 1, row: 3, loop: true },
@@ -208,7 +208,7 @@ export const unitSpriteConfigs: Record<number, UnitSpriteConfig> = {
 // Knight upgraded via Divine Blessing (warrior_v1) — separate strip files, 192×192
 export const knightUpgradedConfig: UnitSpriteConfig = {
   cardId: 5,
-  basePath: 'assets/units/blue/warrior_v1',
+  basePath: '/assets/units/blue/warrior_v1',
   defaultState: 'idle',
   anims: [
     { state: 'idle',        source: 'strip', file: 'warrior_idle.png',    frameWidth: 192, frameHeight: 192, frameCount: 8, loop: true },
@@ -221,7 +221,7 @@ export const knightUpgradedConfig: UnitSpriteConfig = {
 
 // Arrow projectile (shared by Archer + Sniper)
 export const arrowProjectile = {
-  file: 'assets/units/blue/archer_v1/arrow.png',
+  file: '/assets/units/blue/archer_v1/arrow.png',
   width: 64,
   height: 64,
 };
@@ -231,24 +231,24 @@ export const arrowProjectile = {
 export const buildingSpriteConfigs: Record<number, BuildingSpriteConfig> = {
   17: {
     cardId: 17,
-    file: 'assets/buildings/blue/tower/tower.png',
+    file: '/assets/buildings/blue/tower/tower.png',
     width: 128,
     height: 256,
-    destroyedFile: 'assets/buildings/blue/tower/tower_destroyed.png',
+    destroyedFile: '/assets/buildings/blue/tower/tower_destroyed.png',
   },
   18: {
     cardId: 18,
-    file: 'assets/buildings/blue/barracks/barracks.png',
+    file: '/assets/buildings/blue/barracks/barracks.png',
     width: 192,
     height: 256,
-    destroyedFile: 'assets/buildings/blue/destroyed/destroyed.png',
+    destroyedFile: '/assets/buildings/blue/destroyed/destroyed.png',
   },
   19: {
     cardId: 19,
-    file: 'assets/buildings/blue/monastery/monastery.png',
+    file: '/assets/buildings/blue/monastery/monastery.png',
     width: 192,
     height: 320,
-    destroyedFile: 'assets/buildings/blue/destroyed/destroyed.png',
+    destroyedFile: '/assets/buildings/blue/destroyed/destroyed.png',
   },
 };
 
@@ -256,41 +256,41 @@ export const buildingSpriteConfigs: Record<number, BuildingSpriteConfig> = {
 
 export const spellFxConfigs: Record<number, FxConfig> = {
   // 10: Healing — monk heal_effect
-  10: { id: 'healing', file: 'assets/units/blue/monk_v1/heal_effect.png', frameWidth: 192, frameHeight: 192, frameCount: 11, loop: false },
+  10: { id: 'healing', file: '/assets/units/blue/monk_v1/heal_effect.png', frameWidth: 192, frameHeight: 192, frameCount: 11, loop: false },
   // 11: Blast — explosion
-  11: { id: 'blast', file: 'assets/fx/explosion_01.png', frameWidth: 192, frameHeight: 192, frameCount: 8, loop: false },
+  11: { id: 'blast', file: '/assets/fx/explosion_01.png', frameWidth: 192, frameHeight: 192, frameCount: 8, loop: false },
   // 12: Storm — dust
-  12: { id: 'storm', file: 'assets/fx/dust_01.png', frameWidth: 64, frameHeight: 64, frameCount: 8, loop: false },
+  12: { id: 'storm', file: '/assets/fx/dust_01.png', frameWidth: 64, frameHeight: 64, frameCount: 8, loop: false },
   // 13: Surge — water splash
-  13: { id: 'surge', file: 'assets/fx/water_splash.png', frameWidth: 192, frameHeight: 192, frameCount: 9, loop: false },
+  13: { id: 'surge', file: '/assets/fx/water_splash.png', frameWidth: 192, frameHeight: 192, frameCount: 9, loop: false },
   // 14: Inferno — fire
-  14: { id: 'inferno', file: 'assets/fx/fire/fire.png', frameWidth: 128, frameHeight: 128, frameCount: 7, loop: false },
+  14: { id: 'inferno', file: '/assets/fx/fire/fire.png', frameWidth: 128, frameHeight: 128, frameCount: 7, loop: false },
   // 15: Polymorph — sheep bounce (cast effect)
-  15: { id: 'polymorph', file: 'assets/terrain/sheep/happysheep_bouncing.png', frameWidth: 128, frameHeight: 128, frameCount: 6, loop: false },
+  15: { id: 'polymorph', file: '/assets/terrain/sheep/happysheep_bouncing.png', frameWidth: 128, frameHeight: 128, frameCount: 6, loop: false },
   // 16: Curse — curse_effect (recolored heal, user will provide)
-  16: { id: 'curse', file: 'assets/units/blue/monk_v1/heal_effect.png', frameWidth: 192, frameHeight: 192, frameCount: 11, loop: false },
+  16: { id: 'curse', file: '/assets/units/blue/monk_v1/heal_effect.png', frameWidth: 192, frameHeight: 192, frameCount: 11, loop: false },
 };
 
 // Demolitionist explosion FX (not used for spells)
 export const demolitionistExplosionFx: FxConfig = {
-  id: 'demo_explosion', file: 'assets/fx/explosion_02.png', frameWidth: 192, frameHeight: 192, frameCount: 10, loop: false,
+  id: 'demo_explosion', file: '/assets/fx/explosion_02.png', frameWidth: 192, frameHeight: 192, frameCount: 10, loop: false,
 };
 
 // Demolitionist decoy dust FX
 export const decoyDustFx: FxConfig = {
-  id: 'decoy_dust', file: 'assets/fx/dust_02.png', frameWidth: 64, frameHeight: 64, frameCount: 10, loop: false,
+  id: 'decoy_dust', file: '/assets/fx/dust_02.png', frameWidth: 64, frameHeight: 64, frameCount: 10, loop: false,
 };
 
 // Firewall terrain FX
 export const firewallFx: FxConfig = {
-  id: 'firewall', file: 'assets/fx/fire_01.png', frameWidth: 64, frameHeight: 64, frameCount: 8, loop: true,
+  id: 'firewall', file: '/assets/fx/fire_01.png', frameWidth: 64, frameHeight: 64, frameCount: 8, loop: true,
 };
 
 // ─── POLYMORPH SHEEP SPRITE ──────────────────────────────────────────
 
 export const sheepSpriteConfig: UnitSpriteConfig = {
   cardId: -1,
-  basePath: 'assets/terrain/sheep',
+  basePath: '/assets/terrain/sheep',
   defaultState: 'idle',
   anims: [
     { state: 'idle',   source: 'strip', file: 'happysheep_idle.png',     frameWidth: 128, frameHeight: 128, frameCount: 8, loop: true },
