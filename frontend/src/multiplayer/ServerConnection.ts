@@ -1,6 +1,7 @@
+import { canonicalizeAction } from '@server/protocol';
 import type {
   GameAction, ServerMessage, ClientMessage,
-  MatchEvent, SerializedGameState,
+  MatchEvent, SerializedGameState, ActionLogEntry,
 } from '@server/protocol';
 
 export type ConnectionState =
@@ -21,6 +22,7 @@ type EventMap = {
   'turn-timeout': [player: number, damage: number];
   'game-over': [winner: number, reason: string];
   'sign-request': [duelId: number, winner: string];
+  'action-log': [sessionSignatures: [string, string], actions: ActionLogEntry[]];
   'opponent-disconnected': [];
   'opponent-reconnected': [];
   'error': [message: string];
@@ -116,6 +118,9 @@ export class ServerConnection {
         break;
       case 'sign-request':
         this.emit('sign-request', msg.duelId, msg.winner);
+        break;
+      case 'action-log':
+        this.emit('action-log', msg.sessionSignatures, msg.actions);
         break;
       case 'opponent-disconnected':
         this.emit('opponent-disconnected');
@@ -225,14 +230,6 @@ export class ServerConnection {
   }
 }
 
-function canonicalizeAction(seq: number, action: GameAction): string {
-  const obj: Record<string, unknown> = { seq, ...action };
-  const keys = Object.keys(obj).sort();
-  const sorted: Record<string, unknown> = {};
-  for (const k of keys) sorted[k] = obj[k];
-  return JSON.stringify(sorted);
-}
-
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
   const bytes = new Uint8Array(clean.length / 2);
@@ -242,4 +239,4 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-export type { GameAction, MatchEvent, SerializedGameState } from '@server/protocol';
+export type { GameAction, MatchEvent, SerializedGameState, ActionLogEntry } from '@server/protocol';

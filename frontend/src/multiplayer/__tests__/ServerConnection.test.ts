@@ -269,6 +269,18 @@ describe('ServerConnection', () => {
       const msg = JSON.parse(mockWs.sent[mockWs.sent.length - 1]);
       expect(msg.type).toBe('request-log');
     });
+
+    it('emits action-log when server responds', () => {
+      const handler = vi.fn();
+      conn.on('action-log', handler);
+      const actions = [{ seq: 1, action: { type: 'pass' }, hmac: 'abc', timestamp: 123 }];
+      mockWs.receive({
+        type: 'action-log',
+        sessionSignatures: ['0xSig0', '0xSig1'],
+        actions,
+      });
+      expect(handler).toHaveBeenCalledWith(['0xSig0', '0xSig1'], actions);
+    });
   });
 
   // --- sendAction ---
