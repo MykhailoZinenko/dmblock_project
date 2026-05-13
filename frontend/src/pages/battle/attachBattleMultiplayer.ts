@@ -151,15 +151,16 @@ function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEv
         const target = state.units.find(u => u.uid === event.targetUid);
         const attacker = state.units.find(u => u.uid === event.attackerUid);
         if (attacker && target) {
-          scene.playAttack(attacker.uid, { col: target.col, row: target.row }, () => {});
-        }
-        if (target) {
-          scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
-          scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
-        }
-        if (attacker && event.retaliation > 0) {
-          scene.updateHpBar(attacker.uid, event.attackerHp, attacker.maxHp);
-          scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
+          scene.playAttack(attacker.uid, { col: target.col, row: target.row }, () => {
+            scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
+            scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
+            if (event.retaliation > 0) {
+              scene.playAttack(target.uid, { col: attacker.col, row: attacker.row }, () => {
+                scene.updateHpBar(attacker.uid, event.attackerHp, attacker.maxHp);
+                scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
+              });
+            }
+          });
         }
         break;
       }
