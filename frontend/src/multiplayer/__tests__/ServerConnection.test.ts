@@ -146,13 +146,14 @@ describe('ServerConnection', () => {
     it('emits game-over and transitions state', () => {
       const handler = vi.fn();
       conn.on('game-over', handler);
-      mockWs.receive({ type: 'game-over', winner: 0, reason: 'Hero defeated' });
+      const fakeResults = { xpGainWinner: 50, eloChangeWinner: 16 };
+      mockWs.receive({ type: 'game-over', winner: 0, reason: 'Hero defeated', results: fakeResults });
       expect(conn.state).toBe('game-over');
-      expect(handler).toHaveBeenCalledWith(0, 'Hero defeated');
+      expect(handler).toHaveBeenCalledWith(0, 'Hero defeated', fakeResults);
     });
 
     it('does not transition to disconnected after game-over', () => {
-      mockWs.receive({ type: 'game-over', winner: 0, reason: 'Hero defeated' });
+      mockWs.receive({ type: 'game-over', winner: 0, reason: 'Hero defeated', results: {} });
       mockWs.close();
       expect(conn.state).toBe('game-over');
     });

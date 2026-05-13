@@ -16,7 +16,7 @@ export interface AttachBattleMultiplayerInput {
   syncUI: () => void;
   resetTimer: () => void;
   setMultiplayerStatus: (s: string) => void;
-  setGameOver: (result: { winner: number }) => void;
+  setGameOver: (result: { winner: number; results?: any }) => void;
   setMySeat: (seat: 0 | 1) => void;
   setMyTurn: (turn: boolean, isPriority: boolean) => void;
   signTypedData: (params: {
@@ -106,8 +106,8 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
   });
 
   // ── Game over ──
-  conn.on('game-over', (winner) => {
-    p.setGameOver({ winner });
+  conn.on('game-over', (winner, _reason, results) => {
+    p.setGameOver({ winner, results });
   });
 
   // ── Connection events ──

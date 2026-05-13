@@ -20,7 +20,7 @@ type EventMap = {
   'action-rejected': [seq: number, reason: string];
   'state-snapshot': [state: SerializedGameState, seq: number];
   'turn-timeout': [player: number, damage: number];
-  'game-over': [winner: number, reason: string];
+  'game-over': [winner: number, reason: string, results: any];
   'waiting-for-opponent': [];
   'sign-request': [duelId: number, winner: string];
   'action-log': [sessionSignatures: [string, string], actions: ActionLogEntry[]];
@@ -118,7 +118,7 @@ export class ServerConnection {
         break;
       case 'game-over':
         this.setState('game-over');
-        this.emit('game-over', msg.winner, msg.reason);
+        this.emit('game-over', msg.winner, msg.reason, (msg as any).results);
         break;
       case 'sign-request':
         this.emit('sign-request', msg.duelId, msg.winner);

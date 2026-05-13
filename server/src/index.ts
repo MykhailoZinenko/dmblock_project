@@ -5,7 +5,9 @@ import {
   type Room, type PlayerSession,
 } from './rooms.js';
 import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './auth.js';
-import { initSettlement, submitSignature, startArbiterTimeout, cleanupSettlement } from './settlement.js';
+import { cleanupSettlement } from './settlement.js';
+import { calculateResults } from './ratings.js';
+import { settleOnChain } from './chainSettlement.js';
 import type { ClientMessage, ServerMessage, GameAction, MatchEvent } from './protocol.js';
 import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
 
@@ -74,15 +76,16 @@ function handleGameOver(room: Room): void {
     room.activationTimer = null;
   }
   const winner = room.runtime.winner;
-  const winnerAddress = winner !== null && winner >= 0
-    ? room.runtime.addresses[winner]
-    : '0x0000000000000000000000000000000000000000';
-  broadcast(room, { type: 'game-over', winner: winner ?? -1, reason: room.runtime.winReason });
-  broadcast(room, { type: 'sign-request', duelId: room.duelId, winner: winnerAddress });
+  const isDraw = winner === null || winner < 0;
+  const winnerAddress = isDraw ? '0x0000000000000000000000000000000000000000' : room.runtime.addresses[winner];
+  const loserAddress = isDraw ? '0x0000000000000000000000000000000000000000' : room.runtime.addresses[winner === 0 ? 1 : 0];
+  const turnCount = room.runtime.getStateForTest?.()?.turnNumber ?? 0;
 
-  const settlement = initSettlement(room.duelId, winnerAddress);
-  startArbiterTimeout(room.duelId, (duelId, addr) => {
-    console.log(`Arbiter settle: duel ${duelId}, winner ${addr}`);
+  const results = calculateResults(winnerAddress, loserAddress, isDraw, turnCount);
+  broadcast(room, { type: 'game-over', winner: winner ?? -1, reason: room.runtime.winReason, results });
+
+  settleOnChain(room.duelId, winnerAddress).then(txHash => {
+    if (txHash) broadcast(room, { type: 'duel-settled', txHash });
   });
 }
 

@@ -64,7 +64,8 @@ export type ServerMessage =
   | { type: 'action-rejected'; seq: number; reason: string }
   | { type: 'state-snapshot'; state: SerializedGameState; seq: number }
   | { type: 'turn-timeout'; player: number; damage: number }
-  | { type: 'game-over'; winner: number; reason: string }
+  | { type: 'game-over'; winner: number; reason: string; results: DuelResults }
+  | { type: 'duel-settled'; txHash: string }
   | { type: 'sign-request'; duelId: number; winner: string }
   | { type: 'opponent-disconnected' }
   | { type: 'opponent-reconnected' }
@@ -78,6 +79,20 @@ export interface ActionLogEntry {
   action: GameAction;
   hmac: string;
   timestamp: number;
+}
+
+// --- Duel results ---
+
+export interface DuelResults {
+  winnerAddress: string;
+  loserAddress: string;
+  xpGainWinner: number;
+  xpGainLoser: number;
+  eloChangeWinner: number;
+  eloChangeLoser: number;
+  newEloWinner: number;
+  newEloLoser: number;
+  turnCount: number;
 }
 
 // --- Serialization helpers ---

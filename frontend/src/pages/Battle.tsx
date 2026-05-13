@@ -56,7 +56,7 @@ export default function Battle() {
   const [queueInfo, setQueueInfo] = useState<{ labels: string[]; index: number }>({ labels: [], index: 0 });
   const [heroHp, setHeroHp] = useState([HERO_HP, HERO_HP]);
   const [timer, setTimer] = useState(ACTIVATION_TIMER_SECONDS);
-  const [gameOver, setGameOver] = useState<{ winner: number } | null>(null);
+  const [gameOver, setGameOver] = useState<{ winner: number; results?: any } | null>(null);
   const [barrierState, setBarrierState] = useState([true, true]);
   const [myTurn, setMyTurn] = useState(false);
 
@@ -654,37 +654,75 @@ export default function Battle() {
       )}
 
       {/* --- Game Over --- */}
-      {gameOver && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 200,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.7)',
-        }}>
-          <ArcanaPanel variant="slate">
-            <div style={{
-              padding: '24px 48px', textAlign: 'center',
-              fontFamily: 'var(--font-display)', color: 'var(--color-text)',
-            }}>
+      {gameOver && (() => {
+        const won = gameOver.winner === mySeat;
+        const r = gameOver.results;
+        return (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.85)',
+          }}>
+            <ArcanaPanel variant="slate">
               <div style={{
-                fontSize: '32px', color: 'var(--color-gold)',
-                marginBottom: 12,
+                padding: '32px 56px', textAlign: 'center',
+                fontFamily: 'var(--font-display)', color: 'var(--color-text)',
+                minWidth: 340,
               }}>
-                {gameOver.winner === mySeat ? 'VICTORY!' : 'DEFEAT'}
+                <div style={{
+                  fontSize: '36px', color: won ? '#66ff66' : '#ff4444',
+                  marginBottom: 8, fontWeight: 'bold',
+                }}>
+                  {won ? 'VICTORY' : 'DEFEAT'}
+                </div>
+                <div style={{ fontSize: 'var(--text-sm)', marginBottom: 20, opacity: 0.7 }}>
+                  {won ? 'The opposing hero has fallen.' : 'Your hero has been defeated.'}
+                </div>
+
+                {r && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 8,
+                    marginBottom: 24, fontSize: 'var(--text-sm)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 32 }}>
+                      <span style={{ opacity: 0.7 }}>XP Gained</span>
+                      <span style={{ color: 'var(--color-gold)', fontWeight: 'bold' }}>
+                        +{won ? r.xpGainWinner : r.xpGainLoser}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 32 }}>
+                      <span style={{ opacity: 0.7 }}>ELO Change</span>
+                      <span style={{
+                        color: (won ? r.eloChangeWinner : r.eloChangeLoser) >= 0 ? '#66ff66' : '#ff4444',
+                        fontWeight: 'bold',
+                      }}>
+                        {(won ? r.eloChangeWinner : r.eloChangeLoser) >= 0 ? '+' : ''}
+                        {won ? r.eloChangeWinner : r.eloChangeLoser}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 32 }}>
+                      <span style={{ opacity: 0.7 }}>New ELO</span>
+                      <span style={{ fontWeight: 'bold' }}>
+                        {won ? r.newEloWinner : r.newEloLoser}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 32 }}>
+                      <span style={{ opacity: 0.7 }}>Turns Played</span>
+                      <span>{r.turnCount}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                  <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
+                    Return to Lobby
+                  </ArcanaButton>
+                </div>
               </div>
-              <div style={{ fontSize: 'var(--text-sm)', marginBottom: 16, opacity: 0.8 }}>
-                {gameOver.winner === mySeat
-                  ? 'The opposing hero has fallen.'
-                  : 'Your hero has been defeated.'}
-              </div>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
-                  Return to lobby
-                </ArcanaButton>
-              </div>
-            </div>
-          </ArcanaPanel>
-        </div>
-      )}
+            </ArcanaPanel>
+          </div>
+        );
+      })()}
 
       {/* --- Card Picker --- */}
       <CardPicker
