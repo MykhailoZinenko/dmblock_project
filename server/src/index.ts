@@ -1,120 +1,296 @@
-import { WebSocketServer, WebSocket } from "ws";
-import { joinRoom, leaveRoom, getOpponent, type Room, type Player } from "./rooms.js";
-import type { ClientMessage, ServerMessage } from "./protocol.js";
-import { initMatch, recordAction, reportGameOver, determineWinnerOnDisconnect, getMatch, cleanupMatch } from "./arbiter.js";
+import { WebSocketServer, WebSocket } from 'ws';
+import { MatchRuntime } from './MatchRuntime.js';
+import {
+  getOrCreateRoom, assignSeat, getOpponent, cleanupRoom, getAllRooms,
+  type Room, type PlayerSession,
+} from './rooms.js';
+import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './auth.js';
+import { initSettlement, submitSignature, startArbiterTimeout, cleanupSettlement } from './settlement.js';
+import type { ClientMessage, ServerMessage } from './protocol.js';
+import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
 
 const PORT = Number(process.env.PORT ?? 3001);
+const DISCONNECT_TIMEOUT_MS = 60_000;
+const MATCH_CLEANUP_MS = 24 * 60 * 60 * 1000;
+
 const wss = new WebSocketServer({ port: PORT });
 
-type ClientState = { duelId: number | null; room: Room | null; playerIndex: 0 | 1 };
-
+type ClientState = { duelId: number | null; seat: 0 | 1 };
 const clients = new WeakMap<WebSocket, ClientState>();
 
-function send(ws: WebSocket, msg: ServerMessage) {
+function send(ws: WebSocket, msg: ServerMessage): void {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
   }
 }
 
-wss.on("connection", (ws) => {
-  clients.set(ws, { duelId: null, room: null, playerIndex: 0 });
+function broadcast(room: Room, msg: ServerMessage): void {
+  for (const p of room.players) {
+    if (p?.ws) send(p.ws, msg);
+  }
+}
 
-  ws.on("message", (raw) => {
+function startActivationTimer(room: Room): void {
+  if (room.activationTimer) clearTimeout(room.activationTimer);
+  room.activationTimer = setTimeout(() => {
+    if (!room.runtime || room.runtime.phase !== 'playing') return;
+    const controlling = room.runtime.getControllingPlayer();
+    const events = room.runtime.applyTimeout();
+    if (controlling >= 0) {
+      broadcast(room, { type: 'turn-timeout', player: controlling, damage: events.length > 0 ? 3 : 0 });
+    }
+    broadcast(room, {
+      type: 'action-confirmed',
+      seq: room.runtime.seq,
+      action: { type: 'pass' },
+      events,
+      stateHash: '',
+    });
+    if (room.runtime.phase === 'game-over') {
+      handleGameOver(room);
+    } else {
+      startActivationTimer(room);
+    }
+  }, ACTIVATION_TIMER_SECONDS * 1000);
+}
+
+function handleGameOver(room: Room): void {
+  if (!room.runtime) return;
+  if (room.activationTimer) {
+    clearTimeout(room.activationTimer);
+    room.activationTimer = null;
+  }
+  const winner = room.runtime.winner;
+  const winnerAddress = winner !== null && winner >= 0
+    ? room.runtime.addresses[winner]
+    : '0x0000000000000000000000000000000000000000';
+  broadcast(room, { type: 'game-over', winner: winner ?? -1, reason: room.runtime.winReason });
+  broadcast(room, { type: 'sign-request', duelId: room.duelId, winner: winnerAddress });
+
+  const settlement = initSettlement(room.duelId, winnerAddress);
+  startArbiterTimeout(room.duelId, (duelId, addr) => {
+    console.log(`Arbiter settle: duel ${duelId}, winner ${addr}`);
+  });
+}
+
+function tryStartMatch(room: Room): void {
+  if (!room.runtime || room.runtime.phase !== 'playing') return;
+  const snapshot = room.runtime.getSnapshot();
+  for (const p of room.players) {
+    if (p?.ws) {
+      send(p.ws, {
+        type: 'match-started',
+        seat: p.seat,
+        opponent: room.players[p.seat === 0 ? 1 : 0]?.address ?? '',
+        state: snapshot,
+        seq: room.runtime.seq,
+      });
+    }
+  }
+  startActivationTimer(room);
+}
+
+wss.on('connection', (ws) => {
+  clients.set(ws, { duelId: null, seat: 0 });
+
+  ws.on('message', (raw) => {
     let msg: ClientMessage;
     try { msg = JSON.parse(String(raw)); } catch { return; }
 
-    const state = clients.get(ws)!;
+    const clientState = clients.get(ws)!;
 
     switch (msg.type) {
-      case "join": {
-        const result = joinRoom(msg.duelId, ws, msg.address);
-        if ("error" in result) {
-          send(ws, { type: "error", message: result.error });
+      case 'join': {
+        const room = getOrCreateRoom(msg.duelId);
+        const nonce = generateNonce();
+        const seat = assignSeat(room, ws, msg.address, nonce);
+        if (seat === null) {
+          send(ws, { type: 'error', message: 'Room is full' });
           return;
         }
-        state.duelId = msg.duelId;
-        state.room = result.room;
-        state.playerIndex = result.playerIndex;
+        clientState.duelId = msg.duelId;
+        clientState.seat = seat;
 
-        const opponent = getOpponent(result.room, result.playerIndex);
-        if (opponent) {
-          send(ws, { type: "paired", opponent: opponent.address, playerIndex: result.playerIndex });
-          send(opponent.ws, { type: "paired", opponent: msg.address, playerIndex: opponent.index });
-          // Initialize arbiter match tracking
-          const p1 = result.playerIndex === 0 ? msg.address : opponent.address;
-          const p2 = result.playerIndex === 0 ? opponent.address : msg.address;
-          initMatch(msg.duelId, p1, p2);
+        const player = room.players[seat]!;
+
+        // Reconnect path
+        if (room.runtime && room.runtime.phase === 'playing' && player.authenticated) {
+          if (room.disconnectTimers[seat]) {
+            clearTimeout(room.disconnectTimers[seat]!);
+            room.disconnectTimers[seat] = null;
+          }
+          send(ws, { type: 'state-snapshot', state: room.runtime.getSnapshot(), seq: room.runtime.seq });
+          const opp = getOpponent(room, seat);
+          if (opp?.ws) send(opp.ws, { type: 'opponent-reconnected' });
+          return;
         }
+
+        send(ws, { type: 'auth-challenge', nonce });
         break;
       }
 
-      case "sdp-offer":
-      case "sdp-answer":
-      case "ice-candidate": {
-        const opponent = state.room ? getOpponent(state.room, state.playerIndex) : null;
-        if (opponent) {
-          send(opponent.ws, msg as ServerMessage);
+      case 'auth': {
+        if (clientState.duelId === null) {
+          send(ws, { type: 'error', message: 'Not in a room' });
+          return;
         }
-        break;
-      }
-
-      case "action": {
-        if (state.duelId !== null) {
-          recordAction(state.duelId, msg.action);
+        const room = getOrCreateRoom(clientState.duelId);
+        const player = room.players[clientState.seat];
+        if (!player) {
+          send(ws, { type: 'error', message: 'No seat assigned' });
+          return;
         }
-        break;
-      }
 
-      case "sign-result": {
-        // Player reports game result with signature
-        if (state.duelId !== null) {
-          reportGameOver(state.duelId, msg.winner);
-        }
-        break;
-      }
-
-      case "request-arbiter": {
-        // Player requests server-side settlement
-        const match = state.duelId !== null ? getMatch(state.duelId) : undefined;
-        if (match && match.winner) {
-          send(ws, {
-            type: "arbiter-result",
-            duelId: msg.duelId,
-            winner: match.winner,
-            signature: "", // On-chain settlement would go here
+        verifySession(
+          player.address, clientState.duelId, player.nonce,
+          msg.expiresAt, msg.signature as `0x${string}`,
+        )
+          .then((valid) => {
+            if (!valid) {
+              send(ws, { type: 'error', message: 'Invalid session signature' });
+              return;
+            }
+            player.authenticated = true;
+            player.sessionKey = deriveSessionKey(msg.signature);
+            player.sessionSignature = msg.signature;
+            send(ws, { type: 'auth-ok', sessionStart: Date.now() });
+            send(ws, { type: 'waiting-for-opponent' });
+          })
+          .catch(() => {
+            send(ws, { type: 'error', message: 'Auth verification failed' });
           });
+        break;
+      }
+
+      case 'submit-deck': {
+        if (clientState.duelId === null) return;
+        const room = getOrCreateRoom(clientState.duelId);
+        const player = room.players[clientState.seat];
+        if (!player?.authenticated) {
+          send(ws, { type: 'error', message: 'Not authenticated' });
+          return;
+        }
+
+        if (!room.runtime) {
+          const p0 = room.players[0];
+          const p1 = room.players[1];
+          if (!p0 || !p1) {
+            send(ws, { type: 'waiting-for-opponent' });
+            return;
+          }
+          room.runtime = new MatchRuntime(clientState.duelId, p0.address, p1.address);
+        }
+
+        try {
+          room.runtime.submitDeck(clientState.seat, msg.deck);
+        } catch (err) {
+          send(ws, { type: 'error', message: `Deck rejected: ${(err as Error).message}` });
+          return;
+        }
+
+        if (room.runtime.phase === 'playing') {
+          tryStartMatch(room);
         }
         break;
       }
 
-      default:
+      case 'action': {
+        if (clientState.duelId === null) return;
+        const room = getOrCreateRoom(clientState.duelId);
+        if (!room.runtime || room.runtime.phase !== 'playing') return;
+        const player = room.players[clientState.seat];
+        if (!player?.sessionKey) return;
+
+        if (!verifyHmac(player.sessionKey, msg.seq, msg.action, msg.hmac)) {
+          send(ws, { type: 'action-rejected', seq: msg.seq, reason: 'Invalid HMAC' });
+          return;
+        }
+
+        const result = room.runtime.executeAction(clientState.seat, msg.action, msg.hmac);
+        if (!result.ok) {
+          send(ws, { type: 'action-rejected', seq: msg.seq, reason: result.reason ?? 'Invalid action' });
+          return;
+        }
+
+        broadcast(room, {
+          type: 'action-confirmed',
+          seq: room.runtime.seq,
+          action: msg.action,
+          events: result.events,
+          stateHash: result.stateHash,
+        });
+
+        startActivationTimer(room);
+
+        if (room.runtime.phase === 'game-over') {
+          handleGameOver(room);
+        }
         break;
+      }
+
+      case 'sign-result': {
+        if (clientState.duelId === null) return;
+        try {
+          const result = submitSignature(msg.duelId, clientState.seat, msg.signature);
+          if (result.complete) {
+            console.log(`Settlement complete for duel ${msg.duelId}: both signatures collected`);
+            cleanupSettlement(msg.duelId);
+          }
+        } catch {
+          // No settlement in progress
+        }
+        break;
+      }
+
+      case 'request-log': {
+        if (clientState.duelId === null) return;
+        const room = getOrCreateRoom(clientState.duelId);
+        if (!room.runtime) return;
+        const p0 = room.players[0];
+        const p1 = room.players[1];
+        send(ws, {
+          type: 'action-log',
+          sessionSignatures: [p0?.sessionSignature ?? '', p1?.sessionSignature ?? ''],
+          actions: [...room.runtime.actionLog],
+        });
+        break;
+      }
     }
   });
 
-  ws.on("close", () => {
-    const state = clients.get(ws);
-    if (state?.duelId !== null && state?.duelId !== undefined) {
-      const left = leaveRoom(state.duelId, ws);
-      if (left && state.room) {
-        const opponent = getOpponent(state.room, left.index);
-        if (opponent) {
-          send(opponent.ws, { type: "opponent-disconnected" });
-          // Determine winner on disconnect
-          const winner = determineWinnerOnDisconnect(state.duelId, left.address);
-          if (winner) {
-            send(opponent.ws, {
-              type: "arbiter-result",
-              duelId: state.duelId,
-              winner,
-              signature: "",
-            });
-          }
-        }
+  ws.on('close', () => {
+    const clientState = clients.get(ws);
+    if (!clientState?.duelId) return;
+
+    const duelId = clientState.duelId;
+    const room = getOrCreateRoom(duelId);
+    const seat = clientState.seat;
+
+    const opp = getOpponent(room, seat);
+    if (opp?.ws) send(opp.ws, { type: 'opponent-disconnected' });
+
+    room.disconnectTimers[seat] = setTimeout(() => {
+      if (!room.runtime || room.runtime.phase !== 'playing') {
+        cleanupRoom(duelId);
+        return;
       }
-      cleanupMatch(state.duelId);
-    }
+      room.runtime.forfeit(seat);
+      handleGameOver(room);
+    }, DISCONNECT_TIMEOUT_MS);
   });
 });
 
-console.log(`Signaling server listening on ws://localhost:${PORT}`);
+// Periodic cleanup of stale rooms
+setInterval(() => {
+  const now = Date.now();
+  for (const [duelId, room] of getAllRooms()) {
+    if (room.runtime?.phase === 'game-over') {
+      if (now - room.createdAt > MATCH_CLEANUP_MS) {
+        cleanupSettlement(duelId);
+        cleanupRoom(duelId);
+      }
+    }
+  }
+}, 60_000);
+
+console.log(`Match server listening on ws://localhost:${PORT}`);
