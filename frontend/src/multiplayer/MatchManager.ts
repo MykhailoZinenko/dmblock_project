@@ -8,6 +8,7 @@ import { executeMove } from "../game/actions/moveUnit.js";
 import { executeAttack } from "../game/actions/attackUnit.js";
 import { executeHeroAttack } from "../game/actions/heroActions.js";
 import { executeCast } from "../game/actions/castSpell.js";
+import { checkWinCondition } from "../game/actions/heroActions.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,6 +70,7 @@ export class MatchManager {
   private timerHandle: ReturnType<typeof setTimeout> | null = null;
   private activationStartTime = 0;
   private timeoutCount = 0;
+  private gameOverEmitted = false;
 
   // ---------- constructor ----------
 
@@ -175,6 +177,7 @@ export class MatchManager {
         : [this.opponentDeck!, this.myDeck];
 
     ctrl.startGame(seed, decks);
+    this.gameOverEmitted = false;
     this.setPhase("playing");
 
     // Listen for activation changes to restart timer
@@ -182,14 +185,9 @@ export class MatchManager {
       this.startActivationTimer();
     });
 
-    ctrl.on("gameOver", (data: any) => {
-      this.clearTimer();
-      this.setPhase("game-over");
-      this.emit("game-over", data?.winner ?? -1);
-    });
-
     // Start the initial timer
     this.startActivationTimer();
+    this.checkWinAfterStateChange();
   }
 
   // ---------- submit action (local player) ----------
@@ -269,6 +267,19 @@ export class MatchManager {
         this.ctrl.endTurn();
         break;
     }
+
+    this.checkWinAfterStateChange();
+  }
+
+  /** After any deterministic state mutation (local or peer). */
+  private checkWinAfterStateChange(): void {
+    if (!this.ctrl || this.gameOverEmitted || this._phase !== "playing") return;
+    const outcome = checkWinCondition(this.ctrl.getState());
+    if (!outcome) return;
+    this.gameOverEmitted = true;
+    this.clearTimer();
+    this.setPhase("game-over");
+    this.emit("game-over", outcome.winner);
   }
 
   // ---------- activation timer ----------
@@ -307,6 +318,7 @@ export class MatchManager {
 
     // Auto-pass the activation
     this.ctrl.passActivation();
+    this.checkWinAfterStateChange();
   }
 
   // ---------- handle peer messages ----------

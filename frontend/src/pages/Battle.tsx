@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router';
 import { useAccount } from 'wagmi';
 import { Engine } from '../engine/Engine';
 import { BattleScene, type AttackableTarget } from '../game/BattleScene';
@@ -29,15 +29,10 @@ import { CardPicker } from '../components/CardPicker';
 import { ArcanaPanel, ArcanaButton, ArcanaBar } from '../ui/components/index';
 import { ConnectionManager } from '../multiplayer/ConnectionManager';
 import { MatchManager } from '../multiplayer/MatchManager';
-import { listDecks } from '../lib/deckStorage';
-import { DECK_SIZE } from '../lib/deckValidation';
 import { hashState } from '../game/stateHash';
 import type { GameAction } from '../multiplayer/protocol';
-
-// ─── Turn phase ────────────────────────────────────────
-type TurnPhase =
-  | { type: 'priority'; player: number }
-  | { type: 'initiative' };
+import type { BattleTurnPhase as TurnPhase, BattlePriorityState as PriorityState } from './battle/battleTypes';
+import { attachBattleMultiplayer } from './battle/attachBattleMultiplayer';
 
 // ─── UI mode ───────────────────────────────────────────
 type UIMode =
@@ -48,15 +43,10 @@ type UIMode =
   | { type: 'unit_acted' }
   | { type: 'animating' };
 
-// ─── Priority state ────────────────────────────────────
-interface PriorityState {
-  p0Used: boolean;
-  p1Used: boolean;
-  spawnedThisTurn: Set<number>;
-  activatedThisTurn: Set<number>;
-}
+// Turn phase + priority structs: `./battle/battleTypes`.
 
 export default function Battle() {
+  const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const ctrlRef = useRef<GameController | null>(null);
@@ -991,185 +981,47 @@ export default function Battle() {
     };
   }, []);
 
-  // ─── Multiplayer connection ─────────────────────────
+  // ─── Multiplayer session (connection + peer visuals) ──
   useEffect(() => {
     if (!isMultiplayer || !address || duelId === null) return;
-
-    const conn = new ConnectionManager('ws://localhost:3001');
-    connRef.current = conn;
-
-    const match = new MatchManager(conn);
-    matchRef.current = match;
-
-    conn.on('paired', () => {
-      setMultiplayerStatus('Connected to opponent. Exchanging decks...');
-    });
-
-    conn.on('connected', async () => {
-      const deadline = Date.now() + 30_000;
-      let ctrl: GameController | null = null;
-      while (Date.now() < deadline) {
-        ctrl = ctrlRef.current;
-        if (ctrl) break;
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      if (!ctrl) {
-        setMultiplayerStatus('Game engine not ready — refresh the page.');
-        return;
-      }
-
-      const decks = listDecks(address);
-      const validDeck = decks.find((d) => d.slots.filter((s) => s !== null).length === DECK_SIZE);
-      if (!validDeck) {
-        setMultiplayerStatus('No valid deck found!');
-        return;
-      }
-
-      const myDeckIds = validDeck.slots.filter((s): s is number => s !== null);
-
-      const { opponentDeck } = await match.exchangeDecks(myDeckIds);
-      match.startGame(duelId, ctrl);
-      syncUI();
-
-      match.on('opponent-action', (action: GameAction) => {
-        const scene = sceneRef.current;
-        const ctrl = ctrlRef.current;
-        if (!scene || !ctrl) {
-          syncUI();
-          return;
-        }
-        const state = ctrl.getState();
-
-        switch (action.type) {
-          case 'spawn': {
-            const unit = state.units.find(
-              (u) => u.alive && u.col === action.col && u.row === action.row,
-            );
-            if (!unit) break;
-            scene.spawnUnit(unit);
-            const prev = prioRef.current;
-            const newSpawned = new Set(prev.spawnedThisTurn);
-            newSpawned.add(unit.uid);
-            if (action.priorityPhase) {
-              const newPrio: PriorityState = {
-                ...prev,
-                p0Used: action.playerId === 0 ? true : prev.p0Used,
-                p1Used: action.playerId === 1 ? true : prev.p1Used,
-                spawnedThisTurn: newSpawned,
-                activatedThisTurn: prev.activatedThisTurn,
-              };
-              setPriority(newPrio);
-              prioRef.current = newPrio;
-            } else {
-              const newPrio: PriorityState = { ...prev, spawnedThisTurn: newSpawned };
-              setPriority(newPrio);
-              prioRef.current = newPrio;
-            }
-            scene.clearHighlights();
-            advanceTurn();
-            break;
-          }
-          case 'pass': {
-            if (action.priorityPhase && action.priorityPlayerId !== undefined) {
-              const pid = action.priorityPlayerId;
-              const prev = prioRef.current;
-              const newPrio: PriorityState = {
-                ...prev,
-                p0Used: pid === 0 ? true : prev.p0Used,
-                p1Used: pid === 1 ? true : prev.p1Used,
-              };
-              setPriority(newPrio);
-              prioRef.current = newPrio;
-              scene.clearHighlights();
-            } else if (action.releasedUnitUid !== undefined) {
-              const prev = prioRef.current;
-              const newA = new Set(prev.activatedThisTurn);
-              newA.add(action.releasedUnitUid);
-              const newPrio: PriorityState = { ...prev, activatedThisTurn: newA };
-              setPriority(newPrio);
-              prioRef.current = newPrio;
-              scene.clearHighlights();
-              resetTimer();
-            }
-            advanceTurn();
-            break;
-          }
-          case 'move': {
-            const path =
-              action.path && action.path.length >= 2
-                ? action.path.map((p) => ({ col: p.col, row: p.row }))
-                : [];
-            if (path.length >= 2) {
-              scene.moveUnit(action.unitUid, path, () => {});
-            }
-            break;
-          }
-          case 'attack': {
-            const target = state.units.find(u => u.uid === action.targetUid);
-            const attacker = state.units.find(u => u.uid === action.attackerUid);
-            if (target) {
-              scene.updateHpBar(target.uid, target.currentHp, target.maxHp);
-              if (!target.alive) scene.playDeath(target.uid, () => {});
-            }
-            if (attacker) {
-              scene.updateHpBar(attacker.uid, attacker.currentHp, attacker.maxHp);
-              if (!attacker.alive) scene.playDeath(attacker.uid, () => {});
-            }
-            break;
-          }
-          case 'attack-hero': {
-            const p = state.players[action.targetPlayerId];
-            scene.updateHeroHp(action.targetPlayerId, p.heroHp, HERO_HP);
-            break;
-          }
-          case 'cast': {
-            for (const u of state.units) {
-              if (u.alive) scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
-              else scene.playDeath(u.uid, () => {});
-            }
-            scene.updateHeroHp(0, state.players[0].heroHp, HERO_HP);
-            scene.updateHeroHp(1, state.players[1].heroHp, HERO_HP);
-            break;
-          }
-          default:
-            break;
-        }
-
-        checkBarrierChange();
-        syncUI();
-        handleWinCheck();
-      });
-
-      match.on('game-over', (winner: number | null) => {
-        if (winner === null) {
-          setGameOver({ winner: -1 });
-        } else {
-          setGameOver({ winner });
-        }
+    return attachBattleMultiplayer({
+      duelId,
+      address,
+      connRef,
+      matchRef,
+      getCtrl: () => ctrlRef.current,
+      getScene: () => sceneRef.current,
+      prioRef,
+      setPriority,
+      syncUI,
+      advanceTurn,
+      resetTimer,
+      handleWinCheck,
+      checkBarrierChange,
+      setMultiplayerStatus,
+      onMatchGameOver: (winner) => {
+        setGameOver({ winner });
         gameOverRef.current = true;
-      });
-
-      match.on('desync', (myHash: string, theirHash: string) => {
-        console.error(`Desync detected! my=${myHash} theirs=${theirHash}`);
-        setMultiplayerStatus('State desync detected!');
-      });
-
-      match.on('opponent-disconnected', () => {
-        setMultiplayerStatus('Opponent disconnected!');
-      });
-
-      setMultiplayerStatus('Battle started!');
-      setTimeout(() => setMultiplayerStatus(''), 2000);
+        const c = ctrlRef.current;
+        if (c?.isGameStarted()) {
+          c.getState().phase = 'GAME_OVER';
+        }
+      },
     });
-
-    setMultiplayerStatus('Waiting for opponent...');
-    conn.join(duelId, address);
-
-    return () => {
-      matchRef.current?.destroy();
-      conn.disconnect();
-    };
   }, [duelId, address, isMultiplayer, syncUI, advanceTurn, resetTimer, handleWinCheck, checkBarrierChange]);
+
+  // Belt-and-suspenders: if hero HP diverged without firing win handlers, still end the duel.
+  useEffect(() => {
+    if (!isMultiplayer || gameOver !== null) return;
+    const ctrl = ctrlRef.current;
+    if (!ctrl?.isGameStarted() || gameOverRef.current) return;
+    const r = checkWinCondition(ctrl.getState());
+    if (r) {
+      setGameOver(r);
+      gameOverRef.current = true;
+      ctrl.getState().phase = 'GAME_OVER';
+    }
+  }, [heroHp, isMultiplayer, gameOver]);
 
   // ─── Derived display values ─────────────────────────
   const activePlayer = getActivePlayer();
@@ -1359,14 +1211,27 @@ export default function Battle() {
                 fontSize: '32px', color: 'var(--color-gold)',
                 marginBottom: 12,
               }}>
-                P{gameOver.winner + 1} WINS!
+                {gameOver.winner < 0 ? 'MATCH ENDED' : `P${gameOver.winner + 1} WINS!`}
               </div>
               <div style={{ fontSize: 'var(--text-sm)', marginBottom: 16, opacity: 0.8 }}>
-                The opposing hero has fallen.
+                {gameOver.winner < 0
+                  ? 'The duel concluded without a ranked winner.'
+                  : 'The opposing hero has fallen.'}
               </div>
-              <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
-                New Battle
-              </ArcanaButton>
+              {isMultiplayer ? (
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
+                    Return to lobby
+                  </ArcanaButton>
+                  <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
+                    Reload battle
+                  </ArcanaButton>
+                </div>
+              ) : (
+                <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
+                  New Battle
+                </ArcanaButton>
+              )}
             </div>
           </ArcanaPanel>
         </div>

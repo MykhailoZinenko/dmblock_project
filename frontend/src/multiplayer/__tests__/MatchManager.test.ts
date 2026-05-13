@@ -392,7 +392,7 @@ describe('MatchManager', () => {
   });
 
   describe('gameOver event', () => {
-    it('emits game-over and sets phase', async () => {
+    it('emits game-over and sets phase when a hero is already defeated (state check after action)', async () => {
       const promise = match.exchangeDecks([1]);
       conn.simulateMessage({ type: 'deck-hash', hash: '' });
       conn.simulateMessage({ type: 'deck-reveal', deck: [2] });
@@ -403,8 +403,9 @@ describe('MatchManager', () => {
       match.on('game-over', gameOverCb);
       match.startGame(1, ctrl);
 
-      // Trigger gameOver event on the controller
-      (ctrl as any).emit('gameOver', { winner: 0 });
+      ctrl.getState().players[1].heroHp = 0;
+      conn.simulateMessage({ type: 'action', action: { type: 'pass' } });
+
       expect(gameOverCb).toHaveBeenCalledWith(0);
       expect(match.phase).toBe('game-over');
     });
