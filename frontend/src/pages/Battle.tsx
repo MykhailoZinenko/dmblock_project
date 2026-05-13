@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import { useAccount } from 'wagmi';
+import { useAccount, useSignTypedData } from 'wagmi';
 import { Engine } from '../engine/Engine';
 import { BattleScene, type AttackableTarget } from '../game/BattleScene';
 import {
@@ -19,14 +19,12 @@ import {
   getAutoWalkHex, getAutoWalkTargets,
   getCard, isBuilding, isMelee,
   CardType, SpellTargetType,
-  hashState,
 } from '@arcana/game-core';
 import type { UnitInstance, HexCoord } from '@arcana/game-core';
 import { CardPicker } from '../components/CardPicker';
 import { ArcanaPanel, ArcanaButton, ArcanaBar } from '../ui/components/index';
-import { ConnectionManager } from '../multiplayer/ConnectionManager';
-import { MatchManager } from '../multiplayer/MatchManager';
-import type { GameAction } from '../multiplayer/protocol';
+import { ServerConnection } from '../multiplayer/ServerConnection';
+import type { GameAction } from '../multiplayer/ServerConnection';
 import type { BattleTurnPhase as TurnPhase, BattlePriorityState as PriorityState } from './battle/battleTypes';
 import { attachBattleMultiplayer } from './battle/attachBattleMultiplayer';
 
@@ -51,22 +49,16 @@ export default function Battle() {
   const [searchParams] = useSearchParams();
   const duelId = searchParams.get('duel') ? Number(searchParams.get('duel')) : null;
   const { address } = useAccount();
+  const { signTypedDataAsync } = useSignTypedData();
 
-  const connRef = useRef<ConnectionManager | null>(null);
-  const matchRef = useRef<MatchManager | null>(null);
+  const serverRef = useRef<ServerConnection | null>(null);
   const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
+  const [mySeat, setMySeat] = useState<0 | 1>(0);
   const isMultiplayer = duelId !== null;
 
-  const sendAction = useCallback((action: GameAction) => {
-    const conn = connRef.current;
-    const ctrl = ctrlRef.current;
-    if (!isMultiplayer || !conn) return;
-    conn.send({ type: 'action', action });
-    conn.sendToServer({ type: 'action', action });
-    if (ctrl?.isGameStarted()) {
-      const h = hashState(ctrl.getState());
-      conn.send({ type: 'state-hash', hash: h });
-    }
+  const sendAction = useCallback(async (action: GameAction) => {
+    if (!isMultiplayer || !serverRef.current) return;
+    await serverRef.current.sendAction(action);
   }, [isMultiplayer]);
 
   const [phase, setPhase] = useState<TurnPhase>({ type: 'priority', player: 0 });
@@ -95,14 +87,16 @@ export default function Battle() {
     return cp >= 0 ? cp : 0;
   }, []);
 
+  const isMyTurn = useCallback((): boolean => {
+    if (!isMultiplayer) return true;
+    const activeP = getActivePlayer();
+    return activeP === mySeat;
+  }, [isMultiplayer, mySeat, getActivePlayer]);
+
   const syncUI = useCallback(() => {
     const ctrl = ctrlRef.current;
     if (!ctrl?.isGameStarted()) return;
     const s = ctrl.getState();
-    if (isMultiplayer && matchRef.current) {
-      matchRef.current.setUiActivePlayer(getActivePlayer());
-      matchRef.current.setBattlePriorityPhase(phaseRef.current.type === 'priority');
-    }
     setMana([s.players[0].mana, s.players[1].mana]);
     setHeroHp([s.players[0].heroHp, s.players[1].heroHp]);
     setTurn(s.turnNumber);
@@ -123,7 +117,7 @@ export default function Battle() {
     const b0 = isBarrierUp(s, 0);
     const b1 = isBarrierUp(s, 1);
     setBarrierState([b0, b1]);
-  }, [isMultiplayer, getActivePlayer]);
+  }, []);
 
   const showActiveUnitHL = useCallback(() => {
     const ctrl = ctrlRef.current;
@@ -302,8 +296,8 @@ export default function Battle() {
         sceneRef.current?.clearHighlights();
         resetTimer();
         advanceTurn();
-        if (isMultiplayer && connRef.current) {
-          sendAction({ type: 'pass', releasedUnitUid: releasedUid });
+        if (isMultiplayer) {
+          sendAction({ type: 'pass' });
         }
       }
     };
@@ -311,10 +305,10 @@ export default function Battle() {
   }, [isMultiplayer, trackActivated, advanceTurn, resetTimer, sendAction]);
 
   const onCardSelect = useCallback((cardId: number) => {
-    if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
+    if (isMultiplayer && !isMyTurn()) return;
     const ctrl0 = ctrlRef.current;
-    if (isMultiplayer && matchRef.current && ctrl0) {
-      const hand = ctrl0.getState().players[matchRef.current.playerIndex].hand;
+    if (isMultiplayer && ctrl0) {
+      const hand = ctrl0.getState().players[mySeat].hand;
       if (!hand.includes(cardId)) return;
     }
     const card = getCard(cardId);
@@ -374,7 +368,7 @@ export default function Battle() {
   }, [showActiveUnitHL]);
 
   const onPass = useCallback(() => {
-    if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
+    if (isMultiplayer && !isMyTurn()) return;
     const ctrl = ctrlRef.current;
     if (!ctrl || gameOverRef.current) return;
 
@@ -414,7 +408,7 @@ export default function Battle() {
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
       if (!ctrl || !scene) return;
-      if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
+      if (isMultiplayer && !isMyTurn()) return;
       const state = ctrl.getState();
       const currentUI = uiRef.current;
       const currentPhase = phaseRef.current;
@@ -423,11 +417,10 @@ export default function Battle() {
 
       if (
         isMultiplayer &&
-        matchRef.current &&
         (currentUI.type === 'unit_turn' || currentUI.type === 'unit_acted')
       ) {
         const cu0 = ctrl.getCurrentUnit();
-        if (cu0 && cu0.playerId !== matchRef.current.playerIndex) return;
+        if (cu0 && cu0.playerId !== mySeat) return;
       }
 
       // ── Cast spell ──
@@ -740,7 +733,7 @@ export default function Battle() {
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
       if (!ctrl || !scene || gameOverRef.current) return;
-      if (isMultiplayer && matchRef.current && !matchRef.current.isMyTurn) return;
+      if (isMultiplayer && !isMyTurn()) return;
       const currentUI = uiRef.current;
       const currentPhase = phaseRef.current;
       const state = ctrl.getState();
@@ -809,7 +802,7 @@ export default function Battle() {
       if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
       const cu = ctrl.getCurrentUnit();
       if (!cu) return;
-      if (isMultiplayer && matchRef.current && cu.playerId !== matchRef.current.playerIndex) return;
+      if (isMultiplayer && cu.playerId !== mySeat) return;
       const enemyPid = cu.playerId === 0 ? 1 : 0;
       if (clickedPid !== enemyPid) return;
       if (!canAttackHero(state, cu.uid, enemyPid).valid) return;
@@ -869,8 +862,8 @@ export default function Battle() {
         scene.clearHighlights();
         resetTimer();
         advanceTurn();
-        if (isMultiplayer && connRef.current) {
-          sendAction({ type: 'pass', releasedUnitUid: releasedUid });
+        if (isMultiplayer) {
+          sendAction({ type: 'pass' });
         }
       }
     }, 1000);
@@ -977,34 +970,32 @@ export default function Battle() {
     };
   }, []);
 
-  // ─── Multiplayer session (connection + peer visuals) ──
+  // ─── Multiplayer session ──
   useEffect(() => {
     if (!isMultiplayer || !address || duelId === null) return;
     return attachBattleMultiplayer({
       duelId,
       address,
-      connRef,
-      matchRef,
+      serverRef,
       getCtrl: () => ctrlRef.current,
       getScene: () => sceneRef.current,
-      prioRef,
-      setPriority,
+      phaseRef,
+      setPhase,
       syncUI,
-      advanceTurn,
       resetTimer,
-      handleWinCheck,
-      checkBarrierChange,
       setMultiplayerStatus,
-      onMatchGameOver: (winner) => {
-        setGameOver({ winner });
+      setGameOver: (result) => {
+        setGameOver(result);
         gameOverRef.current = true;
         const c = ctrlRef.current;
         if (c?.isGameStarted()) {
           c.getState().phase = 'GAME_OVER';
         }
       },
+      setMySeat,
+      signTypedData: signTypedDataAsync,
     });
-  }, [duelId, address, isMultiplayer, syncUI, advanceTurn, resetTimer, handleWinCheck, checkBarrierChange]);
+  }, [duelId, address, isMultiplayer, syncUI, resetTimer, signTypedDataAsync]);
 
   // Belt-and-suspenders: if hero HP diverged without firing win handlers, still end the duel.
   useEffect(() => {
@@ -1025,7 +1016,7 @@ export default function Battle() {
   const isPlacing = ui.type === 'place_card';
   const isTargetingSpell = ui.type === 'target_spell';
   const isAnimating = ui.type === 'animating';
-  const mpNotMyTurn = isMultiplayer && matchRef.current && !matchRef.current.isMyTurn;
+  const mpNotMyTurn = isMultiplayer && !isMyTurn();
   const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating || mpNotMyTurn;
   const showPassBtn = (phase.type === 'initiative' && (ui.type === 'unit_turn' || ui.type === 'unit_acted'))
     || (phase.type === 'priority' && ui.type === 'pick_card');
@@ -1180,14 +1171,14 @@ export default function Battle() {
         </div>
       )}
 
-      {isMultiplayer && !multiplayerStatus && matchRef.current && (
+      {isMultiplayer && !multiplayerStatus && serverRef.current?.state === 'playing' && (
         <div style={{
           position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.6)', color: matchRef.current.isMyTurn ? '#66ff66' : '#ff6666',
+          background: 'rgba(0,0,0,0.6)', color: isMyTurn() ? '#66ff66' : '#ff6666',
           padding: '4px 16px', borderRadius: 8, fontSize: 13, zIndex: 100,
           fontFamily: 'var(--font-display)',
         }}>
-          {matchRef.current.isMyTurn ? 'Your turn' : "Opponent's turn"}
+          {isMyTurn() ? 'Your turn' : "Opponent's turn"}
         </div>
       )}
 
@@ -1236,13 +1227,13 @@ export default function Battle() {
       {/* ─── Card Picker ──────────────────────────── */}
       <CardPicker
         currentMana={
-          isMultiplayer && matchRef.current && ctrlRef.current?.isGameStarted()
-            ? ctrlRef.current.getState().players[matchRef.current.playerIndex].mana
+          isMultiplayer && ctrlRef.current?.isGameStarted()
+            ? ctrlRef.current.getState().players[mySeat].mana
             : mana[activePlayer]
         }
         handCardIds={
-          isMultiplayer && matchRef.current && ctrlRef.current?.isGameStarted()
-            ? ctrlRef.current.getState().players[matchRef.current.playerIndex].hand
+          isMultiplayer && ctrlRef.current?.isGameStarted()
+            ? ctrlRef.current.getState().players[mySeat].hand
             : undefined
         }
         onCardSelect={onCardSelect}

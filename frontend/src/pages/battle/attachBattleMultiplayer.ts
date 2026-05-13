@@ -1,207 +1,312 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import { ConnectionManager } from "../../multiplayer/ConnectionManager";
-import { MatchManager } from "../../multiplayer/MatchManager";
-import { listDecks } from "../../lib/deckStorage";
-import { DECK_SIZE } from "../../lib/deckValidation";
-import { HERO_HP } from '@arcana/game-core';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { ServerConnection } from '../../multiplayer/ServerConnection';
+import type { MatchEvent, SerializedGameState, GameAction } from '../../multiplayer/ServerConnection';
+import { listDecks } from '../../lib/deckStorage';
+import { DECK_SIZE } from '../../lib/deckValidation';
+import { HERO_HP, getCard } from '@arcana/game-core';
 import type { GameController } from '@arcana/game-core';
-import type { BattleScene } from "../../game/BattleScene";
-import type { GameAction } from "../../multiplayer/protocol";
-import type { BattlePriorityState } from "./battleTypes";
+import type { BattleScene } from '../../game/BattleScene';
+import type { BattleTurnPhase, BattlePriorityState } from './battleTypes';
 
 export interface AttachBattleMultiplayerInput {
   duelId: number;
   address: string;
-  connRef: MutableRefObject<ConnectionManager | null>;
-  matchRef: MutableRefObject<MatchManager | null>;
+  serverRef: MutableRefObject<ServerConnection | null>;
   getCtrl: () => GameController | null;
   getScene: () => BattleScene | null;
-  prioRef: MutableRefObject<BattlePriorityState>;
   phaseRef: MutableRefObject<BattleTurnPhase>;
-  setPriority: Dispatch<SetStateAction<BattlePriorityState>>;
+  setPhase: Dispatch<SetStateAction<BattleTurnPhase>>;
   syncUI: () => void;
-  advanceTurn: () => void;
   resetTimer: () => void;
-  handleWinCheck: () => boolean;
-  checkBarrierChange: () => void;
   setMultiplayerStatus: (s: string) => void;
-  onMatchGameOver: (winner: number) => void;
+  setGameOver: (result: { winner: number }) => void;
+  setMySeat: (seat: 0 | 1) => void;
+  signTypedData: (params: {
+    domain: { name: string; chainId: number };
+    types: Record<string, Array<{ name: string; type: string }>>;
+    primaryType: string;
+    message: Record<string, unknown>;
+  }) => Promise<`0x${string}`>;
 }
 
-/**
- * Owns WebRTC + MatchManager wiring for `/battle?duel=…`.
- * Game rules and animations stay in `Battle.tsx`; this layer only connects,
- * exchanges decks, starts the shared `GameController`, and mirrors peer actions into the scene.
- */
 export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => void {
-  const conn = new ConnectionManager("ws://localhost:3001");
-  p.connRef.current = conn;
+  const serverUrl = import.meta.env.VITE_SERVER_URL || 'ws://localhost:3001';
+  const conn = new ServerConnection(serverUrl, p.duelId, p.address);
+  p.serverRef.current = conn;
 
-  const match = new MatchManager(conn);
-  p.matchRef.current = match;
-
-  const onPaired = () => {
-    p.setMultiplayerStatus("Connected to opponent. Exchanging decks...");
-  };
-
-  const onConnected = async () => {
-    const deadline = Date.now() + 30_000;
-    let ctrl: GameController | null = null;
-    while (Date.now() < deadline) {
-      ctrl = p.getCtrl();
-      if (ctrl) break;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    if (!ctrl) {
-      p.setMultiplayerStatus("Game engine not ready — refresh the page.");
-      return;
-    }
-
-    const decks = listDecks(p.address);
-    const validDeck = decks.find((d) => d.slots.filter((s) => s !== null).length === DECK_SIZE);
-    if (!validDeck) {
-      p.setMultiplayerStatus("No valid deck found!");
-      return;
-    }
-
-    const myDeckIds = validDeck.slots.filter((s): s is number => s !== null);
-
-    await match.exchangeDecks(myDeckIds);
-    match.startGame(p.duelId, ctrl);
-    p.syncUI();
-
-    match.on("opponent-action", (action: GameAction) => {
-      const scene = p.getScene();
-      const c = p.getCtrl();
-      if (!scene || !c) {
-        p.syncUI();
+  conn.on('auth-challenge', (nonce: string) => {
+    p.setMultiplayerStatus('Signing session...');
+    conn.authenticate(p.signTypedData, nonce).then(() => {
+      p.setMultiplayerStatus('Authenticated. Submitting deck...');
+      const decks = listDecks(p.address);
+      const validDeck = decks.find(d => d.slots.filter(s => s !== null).length === DECK_SIZE);
+      if (!validDeck) {
+        p.setMultiplayerStatus('No valid deck found!');
         return;
       }
-      const state = c.getState();
-
-      switch (action.type) {
-        case "spawn": {
-          const unit = state.units.find((u) => u.alive && u.col === action.col && u.row === action.row);
-          if (!unit) break;
-          scene.spawnUnit(unit);
-          const prev = p.prioRef.current;
-          const newSpawned = new Set(prev.spawnedThisTurn);
-          newSpawned.add(unit.uid);
-          if (action.priorityPhase) {
-            const newPrio: BattlePriorityState = {
-              ...prev,
-              p0Used: action.playerId === 0 ? true : prev.p0Used,
-              p1Used: action.playerId === 1 ? true : prev.p1Used,
-              spawnedThisTurn: newSpawned,
-              activatedThisTurn: prev.activatedThisTurn,
-            };
-            p.setPriority(newPrio);
-            p.prioRef.current = newPrio;
-          } else {
-            const newPrio: BattlePriorityState = { ...prev, spawnedThisTurn: newSpawned };
-            p.setPriority(newPrio);
-            p.prioRef.current = newPrio;
-          }
-          scene.clearHighlights();
-          p.advanceTurn();
-          break;
-        }
-        case "pass": {
-          if (action.priorityPhase && action.priorityPlayerId !== undefined) {
-            const pid = action.priorityPlayerId;
-            const prev = p.prioRef.current;
-            const newPrio: BattlePriorityState = {
-              ...prev,
-              p0Used: pid === 0 ? true : prev.p0Used,
-              p1Used: pid === 1 ? true : prev.p1Used,
-            };
-            p.setPriority(newPrio);
-            p.prioRef.current = newPrio;
-            scene.clearHighlights();
-          } else if (action.releasedUnitUid !== undefined) {
-            const prev = p.prioRef.current;
-            const newA = new Set(prev.activatedThisTurn);
-            newA.add(action.releasedUnitUid);
-            const newPrio: BattlePriorityState = { ...prev, activatedThisTurn: newA };
-            p.setPriority(newPrio);
-            p.prioRef.current = newPrio;
-            scene.clearHighlights();
-            p.resetTimer();
-          }
-          p.advanceTurn();
-          break;
-        }
-        case "move": {
-          const path =
-            action.path && action.path.length >= 2
-              ? action.path.map((h) => ({ col: h.col, row: h.row }))
-              : [];
-          if (path.length >= 2) {
-            scene.moveUnit(action.unitUid, path, () => {});
-          }
-          break;
-        }
-        case "attack": {
-          const target = state.units.find((u) => u.uid === action.targetUid);
-          const attacker = state.units.find((u) => u.uid === action.attackerUid);
-          if (target) {
-            scene.updateHpBar(target.uid, target.currentHp, target.maxHp);
-            if (!target.alive) scene.playDeath(target.uid, () => {});
-          }
-          if (attacker) {
-            scene.updateHpBar(attacker.uid, attacker.currentHp, attacker.maxHp);
-            if (!attacker.alive) scene.playDeath(attacker.uid, () => {});
-          }
-          break;
-        }
-        case "attack-hero": {
-          const pl = state.players[action.targetPlayerId];
-          scene.updateHeroHp(action.targetPlayerId, pl.heroHp, HERO_HP);
-          break;
-        }
-        case "cast": {
-          for (const u of state.units) {
-            if (u.alive) scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
-            else scene.playDeath(u.uid, () => {});
-          }
-          scene.updateHeroHp(0, state.players[0].heroHp, HERO_HP);
-          scene.updateHeroHp(1, state.players[1].heroHp, HERO_HP);
-          break;
-        }
-        default:
-          break;
-      }
-
-      p.checkBarrierChange();
-      p.syncUI();
-      p.handleWinCheck();
+      const deckIds = validDeck.slots.filter((s): s is number => s !== null);
+      conn.submitDeck(deckIds);
+      p.setMultiplayerStatus('Deck submitted. Waiting for opponent...');
+    }).catch(() => {
+      p.setMultiplayerStatus('Wallet signature rejected.');
     });
+  });
 
-    match.on("game-over", (winner: number) => {
-      p.onMatchGameOver(winner);
-    });
+  conn.on('waiting-for-opponent' as any, () => {
+    p.setMultiplayerStatus('Waiting for opponent...');
+  });
 
-    match.on("desync", (myHash: string, theirHash: string) => {
-      console.error(`Desync detected! my=${myHash} theirs=${theirHash}`);
-      p.setMultiplayerStatus("State desync detected!");
-    });
+  conn.on('match-started', (state: SerializedGameState, seat: 0 | 1, opponent: string, seq: number) => {
+    p.setMySeat(seat);
+    p.setMultiplayerStatus('Battle started!');
+    setTimeout(() => p.setMultiplayerStatus(''), 2000);
 
-    match.on("opponent-disconnected", () => {
-      p.setMultiplayerStatus("Opponent disconnected!");
-    });
+    // Initialize game controller from server snapshot
+    const ctrl = p.getCtrl();
+    if (!ctrl) return;
+    // For MP, the server owns the game state. The client uses GameController
+    // only for local display — we start it with the same seed as the server
+    // and trust the server's state. The controller is used for getControllingPlayer()
+    // and initiative queue display.
+    ctrl.startGame(0, [state.players[0].hand, state.players[1].hand]);
 
-    p.setMultiplayerStatus("Battle started!");
-    setTimeout(() => p.setMultiplayerStatus(""), 2000);
-  };
+    // Overwrite client state from server snapshot
+    const s = ctrl.getState();
+    s.turnNumber = state.turnNumber;
+    s.nextUnitUid = state.nextUnitUid;
+    s.currentActivationIndex = state.currentActivationIndex;
+    s.phase = state.phase;
+    s.players[0].mana = state.players[0].mana;
+    s.players[0].heroHp = state.players[0].heroHp;
+    s.players[1].mana = state.players[1].mana;
+    s.players[1].heroHp = state.players[1].heroHp;
+    // The hand/deck for our seat comes from the server; opponent's is hidden
+    s.players[seat].hand = state.players[seat].hand;
+    s.players[seat].deck = state.players[seat].deck;
 
-  conn.on("paired", onPaired);
-  conn.on("connected", onConnected);
-  p.setMultiplayerStatus("Waiting for opponent...");
-  conn.join(p.duelId, p.address);
+    p.syncUI();
+  });
 
+  conn.on('action-confirmed', (_seq: number, action: GameAction, events: MatchEvent[], _stateHash: string) => {
+    const scene = p.getScene();
+    const ctrl = p.getCtrl();
+    if (!scene || !ctrl) return;
+    const state = ctrl.getState();
+
+    applyEventsToScene(scene, ctrl, events, p);
+  });
+
+  conn.on('action-rejected', (_seq: number, reason: string) => {
+    console.warn('Action rejected:', reason);
+  });
+
+  conn.on('turn-timeout', (player: number, damage: number) => {
+    const scene = p.getScene();
+    if (scene && damage > 0) {
+      scene.showStampDamage(player, damage);
+    }
+  });
+
+  conn.on('game-over', (winner: number, _reason: string) => {
+    p.setGameOver({ winner });
+    const ctrl = p.getCtrl();
+    if (ctrl?.isGameStarted()) {
+      ctrl.getState().phase = 'GAME_OVER';
+    }
+  });
+
+  conn.on('state-snapshot', (state: SerializedGameState, _seq: number) => {
+    p.setMultiplayerStatus('Reconnected!');
+    setTimeout(() => p.setMultiplayerStatus(''), 2000);
+    // Full state rebuild from snapshot on reconnect
+    // TODO: rebuild scene from snapshot
+  });
+
+  conn.on('opponent-disconnected', () => {
+    p.setMultiplayerStatus('Opponent disconnected. Waiting 60s...');
+  });
+
+  conn.on('opponent-reconnected', () => {
+    p.setMultiplayerStatus('Opponent reconnected!');
+    setTimeout(() => p.setMultiplayerStatus(''), 2000);
+  });
+
+  conn.on('sign-request', (_duelId: number, winner: string) => {
+    // TODO: prompt wallet to sign settlement
+    console.log('Settlement sign requested. Winner:', winner);
+  });
+
+  conn.on('error', (message: string) => {
+    p.setMultiplayerStatus(`Error: ${message}`);
+  });
+
+  p.setMultiplayerStatus('Connecting...');
   return () => {
-    p.matchRef.current?.destroy();
-    p.connRef.current = null;
-    p.matchRef.current = null;
+    conn.disconnect();
+    p.serverRef.current = null;
   };
+}
+
+function applyEventsToScene(
+  scene: BattleScene,
+  ctrl: GameController,
+  events: MatchEvent[],
+  p: Pick<AttachBattleMultiplayerInput, 'syncUI' | 'resetTimer' | 'setPhase' | 'phaseRef'>,
+): void {
+  const state = ctrl.getState();
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'unit-spawned': {
+        // Create a UnitInstance-like object for the scene
+        const card = getCard(event.cardId);
+        const unit = state.units.find(u => u.uid === event.uid);
+        if (!unit) {
+          // Server spawned a unit we don't have locally — create minimal representation
+          // This happens because the client doesn't run executeSpawn for MP
+          const newUnit = {
+            uid: event.uid,
+            cardId: event.cardId,
+            playerId: event.playerId,
+            col: event.col,
+            row: event.row,
+            currentHp: card.hp,
+            maxHp: card.hp,
+            attack: card.attack,
+            defense: card.defense,
+            speed: card.initiative,
+            remainingAp: card.initiative,
+            alive: true,
+            occupiedCells: [{ col: event.col, row: event.row }],
+            polymorphed: false,
+            activeEffects: [],
+            retaliatedThisTurn: false,
+            ammo: card.ammo,
+            size: card.size,
+            magicResistance: card.magicResistance,
+          };
+          state.units.push(newUnit as any);
+          state.board[event.row][event.col].unitUid = event.uid;
+          scene.spawnUnit(newUnit as any);
+        } else {
+          scene.spawnUnit(unit);
+        }
+        break;
+      }
+      case 'unit-moved': {
+        if (event.path.length >= 2) {
+          scene.moveUnit(event.uid, event.path, () => {});
+        }
+        // Update local state position
+        const movedUnit = state.units.find(u => u.uid === event.uid);
+        if (movedUnit && event.path.length > 0) {
+          const dest = event.path[event.path.length - 1];
+          state.board[movedUnit.row][movedUnit.col].unitUid = null;
+          movedUnit.col = dest.col;
+          movedUnit.row = dest.row;
+          for (const cell of movedUnit.occupiedCells) {
+            cell.col = dest.col;
+            cell.row = dest.row;
+          }
+          state.board[dest.row][dest.col].unitUid = movedUnit.uid;
+        }
+        break;
+      }
+      case 'unit-attacked': {
+        const target = state.units.find(u => u.uid === event.targetUid);
+        const attacker = state.units.find(u => u.uid === event.attackerUid);
+        if (target) {
+          target.currentHp = event.targetHp;
+          scene.updateHpBar(target.uid, target.currentHp, target.maxHp);
+          scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
+        }
+        if (attacker && event.retaliation > 0) {
+          attacker.currentHp = event.attackerHp;
+          scene.updateHpBar(attacker.uid, attacker.currentHp, attacker.maxHp);
+          scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
+        }
+        break;
+      }
+      case 'hero-attacked': {
+        state.players[event.targetPlayerId].heroHp = event.heroHp;
+        scene.showHeroDamage(event.targetPlayerId, event.damage, false);
+        scene.updateHeroHp(event.targetPlayerId, event.heroHp, HERO_HP);
+        break;
+      }
+      case 'unit-died': {
+        const dead = state.units.find(u => u.uid === event.uid);
+        if (dead) {
+          dead.alive = false;
+          scene.playDeath(event.uid, () => {});
+        }
+        break;
+      }
+      case 'spell-cast': {
+        scene.playSpellFx(event.cardId, { col: event.col, row: event.row }, () => {});
+        break;
+      }
+      case 'effect-applied': {
+        if (event.effectId === 'polymorph') {
+          scene.swapToSheep(event.uid);
+        }
+        const statusLabel = event.effectId === 'slow' ? 'SLOWED'
+          : event.effectId === 'polymorph' ? 'POLYMORPHED'
+          : 'CURSED';
+        const unit = state.units.find(u => u.uid === event.uid);
+        if (unit) {
+          scene.showStatusText({ col: unit.col, row: unit.row }, statusLabel);
+        }
+        break;
+      }
+      case 'effect-expired': {
+        if (event.effectId === 'polymorph') {
+          scene.restoreFromSheep(event.uid);
+        }
+        break;
+      }
+      case 'hp-changed': {
+        const unit = state.units.find(u => u.uid === event.uid);
+        if (unit) {
+          unit.currentHp = event.hp;
+          scene.updateHpBar(unit.uid, unit.currentHp, unit.maxHp);
+        }
+        break;
+      }
+      case 'hero-hp-changed': {
+        state.players[event.playerId].heroHp = event.hp;
+        scene.updateHeroHp(event.playerId, event.hp, HERO_HP);
+        break;
+      }
+      case 'mana-changed': {
+        state.players[event.playerId].mana = event.mana;
+        break;
+      }
+      case 'activation-changed': {
+        // Update activation queue pointer
+        if (event.uid === null) {
+          state.currentActivationIndex = state.activationQueue.length;
+        } else {
+          const idx = state.activationQueue.findIndex(u => u.uid === event.uid);
+          if (idx >= 0) state.currentActivationIndex = idx;
+        }
+        break;
+      }
+      case 'turn-changed': {
+        state.turnNumber = event.turnNumber;
+        break;
+      }
+      case 'queue-rebuilt': {
+        // Rebuild activation queue from UIDs
+        state.activationQueue = event.queue
+          .map(uid => state.units.find(u => u.uid === uid))
+          .filter((u): u is NonNullable<typeof u> => u !== undefined);
+        state.currentActivationIndex = 0;
+        break;
+      }
+    }
+  }
+
+  scene.clearHighlights();
+  p.syncUI();
+  p.resetTimer();
 }
