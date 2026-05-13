@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { CONTRACTS } from "../contracts";
 
@@ -101,7 +101,6 @@ export function useDuelLobby() {
   const { data: statsResults } = useReadContracts({
     contracts: address
       ? [
-          { ...CONTRACTS.duelManager, functionName: "getElo" as const, args: [address] },
           { ...CONTRACTS.duelManager, functionName: "getMatchCount" as const, args: [address] },
           { ...CONTRACTS.duelManager, functionName: "isCalibrated" as const, args: [address] },
           { ...CONTRACTS.freedomRecord, functionName: "isFreed" as const, args: [address] },
@@ -111,15 +110,24 @@ export function useDuelLobby() {
     query: { enabled: isConnected && !!address },
   });
 
+  const [serverElo, setServerElo] = useState<number>(1000);
+  useEffect(() => {
+    if (!address) return;
+    const serverUrl = import.meta.env.VITE_SERVER_URL?.replace('ws', 'http') || 'http://localhost:3001';
+    fetch(`${serverUrl}/api/elo/${address}`)
+      .then(r => r.json())
+      .then(data => setServerElo(data.elo ?? 1000))
+      .catch(() => {});
+  }, [address]);
+
   const playerStats: PlayerStats | null = useMemo(() => {
     if (!statsResults) return null;
-    const elo = statsResults[0]?.status === "success" ? Number(statsResults[0].result as bigint) : 1000;
-    const matchCount = statsResults[1]?.status === "success" ? Number(statsResults[1].result as bigint) : 0;
-    const isCalibrated = statsResults[2]?.status === "success" ? (statsResults[2].result as boolean) : false;
-    const isFreed = statsResults[3]?.status === "success" ? (statsResults[3].result as boolean) : false;
-    const seasonId = statsResults[4]?.status === "success" ? Number(statsResults[4].result) : 1;
-    return { elo, matchCount, isCalibrated, isFreed, seasonId };
-  }, [statsResults]);
+    const matchCount = statsResults[0]?.status === "success" ? Number(statsResults[0].result as bigint) : 0;
+    const isCalibrated = statsResults[1]?.status === "success" ? (statsResults[1].result as boolean) : false;
+    const isFreed = statsResults[2]?.status === "success" ? (statsResults[2].result as boolean) : false;
+    const seasonId = statsResults[3]?.status === "success" ? Number(statsResults[3].result) : 1;
+    return { elo: serverElo, matchCount, isCalibrated, isFreed, seasonId };
+  }, [statsResults, serverElo]);
 
   return {
     allDuels,

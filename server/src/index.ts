@@ -6,16 +6,36 @@ import {
 } from './rooms.js';
 import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './auth.js';
 import { cleanupSettlement } from './settlement.js';
-import { calculateResults } from './ratings.js';
+import { calculateResults, getElo } from './ratings.js';
 import { settleOnChain } from './chainSettlement.js';
 import type { ClientMessage, ServerMessage, GameAction, MatchEvent } from './protocol.js';
 import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
+
+import { createServer } from 'http';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const DISCONNECT_TIMEOUT_MS = 60_000;
 const MATCH_CLEANUP_MS = 24 * 60 * 60 * 1000;
 
-const wss = new WebSocketServer({ port: PORT });
+const httpServer = createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+
+  const match = req.url?.match(/^\/api\/elo\/(.+)$/);
+  if (match) {
+    const addr = match[1];
+    const elo = getElo(addr);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ address: addr, elo }));
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocketServer({ server: httpServer });
+httpServer.listen(PORT);
 
 type ClientState = { duelId: number | null; seat: 0 | 1 };
 const clients = new WeakMap<WebSocket, ClientState>();
