@@ -163,7 +163,7 @@ describe('ServerConnection', () => {
 
   describe('deck submission', () => {
     it('sends submit-deck message', () => {
-      conn.submitDeck([0, 1, 2, 3]);
+      conn.submitDeck([0, 1, 2, 3], 1);
       const msg = JSON.parse(mockWs.sent[mockWs.sent.length - 1]);
       expect(msg.type).toBe('submit-deck');
       expect(msg.deck).toEqual([0, 1, 2, 3]);

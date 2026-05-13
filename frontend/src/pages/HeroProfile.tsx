@@ -43,7 +43,8 @@ export default function HeroProfile() {
     return <div className="page"><p className="msg-info">Loading hero...</p></div>;
   }
 
-  const canLevelUp = hero.level < 50;
+  const xpNeeded = hero.level * 100;
+  const canLevelUp = hero.level < 50 && hero.xp >= xpNeeded;
   const dark = "var(--color-text-dark)";
 
   const handleLevelUp = () => {
@@ -72,7 +73,12 @@ export default function HeroProfile() {
 
       <ArcanaPanel variant="parchment" style={{ maxWidth: 620 }}>
         <div style={{ padding: "var(--space-4)", color: dark }}>
-          <ArcanaBar value={hero.level} max={50} color="gold">Level {hero.level} / 50</ArcanaBar>
+          <ArcanaBar value={hero.level} max={50} color="blue">Level {hero.level} / 50</ArcanaBar>
+          <div style={{ marginTop: "var(--space-2)" }}>
+            <ArcanaBar value={hero.xp} max={xpNeeded || 100} color={canLevelUp ? 'green' as any : 'blue'}>
+              XP: {hero.xp} / {xpNeeded} {canLevelUp && '— Ready to level up!'}
+            </ArcanaBar>
+          </div>
 
           <div className="stat-grid" style={{ marginTop: "var(--space-3)" }}>
             <div className="stat-tile"><span>Attack</span><strong>{hero.attack}</strong></div>

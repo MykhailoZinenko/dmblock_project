@@ -48,7 +48,7 @@ export interface SerializedGameState {
 export type ClientMessage =
   | { type: 'join'; duelId: number; address: string }
   | { type: 'auth'; signature: string; nonce: string; expiresAt: number }
-  | { type: 'submit-deck'; deck: number[] }
+  | { type: 'submit-deck'; deck: number[]; heroId: number }
   | { type: 'action'; action: GameAction; seq: number; hmac: string }
   | { type: 'sign-result'; duelId: number; winner: string; signature: string }
   | { type: 'request-log' };

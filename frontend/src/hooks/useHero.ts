@@ -71,7 +71,7 @@ export function useHero() {
     query: { enabled },
   });
 
-  const hero = heroData as { faction: number; archetype: number; attack: number; defense: number; spellPower: number; knowledge: number; level: number; seasonId: number } | undefined;
+  const hero = heroData as { faction: number; archetype: number; attack: number; defense: number; spellPower: number; knowledge: number; level: number; xp: number; seasonId: number } | undefined;
 
   const traits = traitsData as [number[], number[]] | undefined;
   const options = traitOptions as [number, number] | undefined;

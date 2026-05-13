@@ -9,6 +9,7 @@ export interface PlayerSession {
   sessionSignature: string;
   nonce: string;
   authenticated: boolean;
+  heroId: number;
 }
 
 export interface Room {
@@ -52,11 +53,11 @@ export function assignSeat(room: Room, ws: WebSocket, address: string, nonce: st
     }
   }
   if (!room.players[0]) {
-    room.players[0] = { ws, address, seat: 0, sessionKey: null, sessionSignature: '', nonce, authenticated: false };
+    room.players[0] = { ws, address, seat: 0, sessionKey: null, sessionSignature: '', nonce, authenticated: false, heroId: 0 };
     return 0;
   }
   if (!room.players[1]) {
-    room.players[1] = { ws, address, seat: 1, sessionKey: null, sessionSignature: '', nonce, authenticated: false };
+    room.players[1] = { ws, address, seat: 1, sessionKey: null, sessionSignature: '', nonce, authenticated: false, heroId: 0 };
     return 1;
   }
   return null;

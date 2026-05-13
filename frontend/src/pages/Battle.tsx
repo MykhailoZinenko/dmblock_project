@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import { useAccount, useWalletClient } from 'wagmi';
+import { useHero } from '../hooks/useHero';
 import { Engine } from '../engine/Engine';
 import { BattleScene, type AttackableTarget } from '../game/BattleScene';
 import {
@@ -45,6 +46,7 @@ export default function Battle() {
   const duelId = searchParams.get('duel') ? Number(searchParams.get('duel')) : null;
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { heroId } = useHero();
 
   const serverRef = useRef<ServerConnection | null>(null);
   const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
@@ -424,6 +426,7 @@ export default function Battle() {
     return attachBattleMultiplayer({
       duelId,
       address,
+      heroId: heroId ? Number(heroId) : 0,
       serverRef,
       getCtrl: () => ctrlRef.current,
       getScene: () => sceneRef.current,

@@ -7,7 +7,7 @@ import {
 import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './auth.js';
 import { cleanupSettlement } from './settlement.js';
 import { calculateResults, getElo } from './ratings.js';
-import { settleOnChain } from './chainSettlement.js';
+import { settleOnChain, addXpOnChain } from './chainSettlement.js';
 import type { ClientMessage, ServerMessage, GameAction, MatchEvent } from './protocol.js';
 import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
 
@@ -107,6 +107,21 @@ function handleGameOver(room: Room): void {
   settleOnChain(room.duelId, winnerAddress).then(txHash => {
     if (txHash) broadcast(room, { type: 'duel-settled', txHash });
   });
+
+  // Grant XP on-chain
+  const heroNftAddress = process.env.HERO_NFT_ADDRESS;
+  if (heroNftAddress) {
+    const p0 = room.players[0];
+    const p1 = room.players[1];
+    if (p0?.heroId) {
+      const xp = isDraw ? results.xpGainWinner : (winner === 0 ? results.xpGainWinner : results.xpGainLoser);
+      addXpOnChain(heroNftAddress, p0.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p0.heroId}: +${xp}`); });
+    }
+    if (p1?.heroId) {
+      const xp = isDraw ? results.xpGainLoser : (winner === 1 ? results.xpGainWinner : results.xpGainLoser);
+      addXpOnChain(heroNftAddress, p1.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p1.heroId}: +${xp}`); });
+    }
+  }
 }
 
 function tryStartMatch(room: Room): void {
@@ -222,6 +237,7 @@ wss.on('connection', (ws) => {
           send(ws, { type: 'error', message: 'Not authenticated' });
           return;
         }
+        player.heroId = msg.heroId;
 
         if (!room.runtime) {
           const p0 = room.players[0];

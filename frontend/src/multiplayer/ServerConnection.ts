@@ -173,8 +173,8 @@ export class ServerConnection {
     this.sendRaw({ type: 'auth', signature, nonce, expiresAt });
   }
 
-  submitDeck(deck: number[]): void {
-    this.sendRaw({ type: 'submit-deck', deck });
+  submitDeck(deck: number[], heroId: number): void {
+    this.sendRaw({ type: 'submit-deck', deck, heroId });
   }
 
   async sendAction(action: GameAction): Promise<void> {

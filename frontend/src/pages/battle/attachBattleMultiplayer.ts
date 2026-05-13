@@ -10,6 +10,7 @@ import type { BattleScene } from '../../game/BattleScene';
 export interface AttachBattleMultiplayerInput {
   duelId: number;
   address: string;
+  heroId: number;
   serverRef: MutableRefObject<ServerConnection | null>;
   getCtrl: () => GameController | null;
   getScene: () => BattleScene | null;
@@ -50,7 +51,7 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
       p.setMultiplayerStatus('No valid deck found!');
       return;
     }
-    conn.submitDeck(validDeck.slots.filter((s): s is number => s !== null));
+    conn.submitDeck(validDeck.slots.filter((s): s is number => s !== null), p.heroId);
     p.setMultiplayerStatus('Waiting for opponent...');
   });
 
