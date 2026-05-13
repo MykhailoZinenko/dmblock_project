@@ -287,11 +287,8 @@ wss.on('connection', (ws) => {
         }
         player.heroId = msg.heroId;
 
-        // Verify deck ownership in background — don't block game start
-        verifyDeckOwnership(player.address, msg.deck).then(check => {
-          if (!check.valid) console.warn(`Deck ownership failed for ${player.address}: ${check.reason}`);
-          else console.log(`Deck verified for ${player.address}`);
-        }).catch(() => {});
+        // TODO: deck ownership verification disabled — Alchemy calls too slow from Fly.io
+        // Re-enable when server is closer to RPC or use a caching layer
 
         if (!room.runtime) {
           const p0 = room.players[0];
