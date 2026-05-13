@@ -265,6 +265,12 @@ export class BattleScene {
     this.units.delete(uid);
   }
 
+  clearAllUnits(): void {
+    for (const [uid] of this.units) {
+      this.removeUnit(uid);
+    }
+  }
+
   updateHpBar(uid: number, currentHp: number, maxHp: number): void {
     const entry = this.units.get(uid);
     if (!entry) return;

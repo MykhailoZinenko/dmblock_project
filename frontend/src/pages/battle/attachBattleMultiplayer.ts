@@ -133,7 +133,7 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     const localState = ctrl.getState();
     applyServerSnapshot(localState, snapshot);
 
-    // Rebuild scene visuals from units
+    scene.clearAllUnits();
     for (const unit of localState.units) {
       if (unit.alive) scene.spawnUnit(unit);
     }
