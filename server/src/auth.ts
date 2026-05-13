@@ -2,9 +2,11 @@ import { createHmac, createHash, randomBytes } from 'crypto';
 import { verifyTypedData } from 'viem';
 import { canonicalizeAction, type GameAction } from './protocol.js';
 
+const SESSION_CHAIN_ID = Number(process.env.CHAIN_ID || 31337);
+
 const SESSION_DOMAIN = {
   name: 'Arcana Arena' as const,
-  chainId: 84532,
+  chainId: SESSION_CHAIN_ID,
 };
 
 const SESSION_TYPES = {

@@ -30,9 +30,11 @@ type EventMap = {
 
 type EventKey = keyof EventMap;
 
+const SESSION_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 31337);
+
 const SESSION_DOMAIN = {
   name: 'Arcana Arena',
-  chainId: 84532,
+  chainId: SESSION_CHAIN_ID,
 } as const;
 
 const SESSION_TYPES = {
