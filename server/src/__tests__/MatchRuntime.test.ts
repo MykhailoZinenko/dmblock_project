@@ -348,18 +348,44 @@ describe('MatchRuntime', () => {
       expect(rt.getTurnPhase().type).toBe('priority');
     });
 
-    it('transitions to initiative after both players spawn or pass', () => {
+    it('stays in priority if both pass without spawning (new turn, still no units)', () => {
       const rt = new MatchRuntime(50, '0xA', '0xB');
       rt.submitDeck(0, validDeck());
       rt.submitDeck(1, validDeck());
 
-      // Both pass priority
       const first = rt.getControllingPlayer();
       rt.executeAction(first, { type: 'pass' });
       const second = rt.getControllingPlayer();
       rt.executeAction(second, { type: 'pass' });
 
-      expect(rt.getTurnPhase().type).toBe('initiative');
+      // Both passed with 0 units → turn advances → priority again (still no units)
+      expect(rt.getTurnPhase().type).toBe('priority');
+      expect(rt.getStateForTest().turnNumber).toBeGreaterThan(1);
+    });
+
+    it('transitions to initiative after both players spawn', () => {
+      const rt = new MatchRuntime(50, '0xA', '0xB');
+      rt.submitDeck(0, validDeck());
+      rt.submitDeck(1, validDeck());
+
+      // Spawn units for both
+      const cp1 = rt.getControllingPlayer();
+      const state = rt.getStateForTest();
+      state.players[cp1].mana = 99;
+      const unitCard = cardRegistry.find(c => c.cardType === CardType.UNIT)!;
+      state.players[cp1].hand.push(unitCard.id);
+      const col1 = cp1 === 0 ? 0 : 14;
+      rt.executeAction(cp1, { type: 'spawn', playerId: cp1, cardId: unitCard.id, col: col1, row: 0 });
+
+      const cp2 = rt.getControllingPlayer();
+      state.players[cp2].mana = 99;
+      state.players[cp2].hand.push(unitCard.id);
+      const col2 = cp2 === 0 ? 0 : 14;
+      rt.executeAction(cp2, { type: 'spawn', playerId: cp2, cardId: unitCard.id, col: col2, row: 0 });
+
+      // After both spawn, should transition through initiative → queue exhausted → new turn
+      // New turn: both have units, so initiative phase
+      expect(rt.getTurnPhase().type).not.toBe('priority');
     });
 
     it('rejects move/attack/end-turn during priority phase', () => {

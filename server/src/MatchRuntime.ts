@@ -82,7 +82,10 @@ export class MatchRuntime {
 
   // --- Turn phase management ---
 
-  private advanceTurnPhase(): void {
+  private pendingAutoEndEvents: MatchEvent[] = [];
+
+  private advanceTurnPhase(depth = 0): void {
+    if (depth > 5) return;
     const state = this.ctrl.getState();
     const p0Units = state.units.filter(u => u.alive && u.playerId === 0).length;
     const p1Units = state.units.filter(u => u.alive && u.playerId === 1).length;
@@ -109,6 +112,28 @@ export class MatchRuntime {
       const skipUids = new Set([...this.spawnedThisTurn, ...this.activatedThisTurn]);
       state.activationQueue = state.activationQueue.filter(u => !skipUids.has(u.uid));
       state.currentActivationIndex = 0;
+    }
+
+    if (this.ctrl.isQueueExhausted()) {
+      const stateBefore = this.ctrl.getState();
+      const effectsBefore = this.collectActiveEffects(stateBefore);
+
+      this.ctrl.endTurn();
+
+      const stateAfter = this.ctrl.getState();
+      const effectsAfter = this.collectActiveEffects(stateAfter);
+      this.emitEffectExpiryEvents(effectsBefore, effectsAfter, this.pendingAutoEndEvents);
+
+      this.pendingAutoEndEvents.push({ type: 'turn-changed', turnNumber: stateAfter.turnNumber });
+      this.pendingAutoEndEvents.push({ type: 'queue-rebuilt', queue: stateAfter.activationQueue.map(u => u.uid) });
+      for (const p of stateAfter.players) {
+        this.pendingAutoEndEvents.push({ type: 'mana-changed', playerId: p.id, mana: p.mana });
+      }
+
+      this.priorityUsed = [false, false];
+      this.spawnedThisTurn.clear();
+      this.activatedThisTurn.clear();
+      this.advanceTurnPhase(depth + 1);
     }
   }
 
@@ -142,6 +167,7 @@ export class MatchRuntime {
     const state = this.ctrl.getState();
     const events: MatchEvent[] = [];
 
+    this.pendingAutoEndEvents = [];
     let result: { ok: boolean; reason?: string };
     try {
       result = this.validateAndExecute(state, seat, action, events);
@@ -150,6 +176,10 @@ export class MatchRuntime {
     }
     if (!result.ok) {
       return { ok: false, reason: result.reason, events: [], stateHash: '' };
+    }
+    if (this.pendingAutoEndEvents.length > 0) {
+      events.push(...this.pendingAutoEndEvents);
+      this.pendingAutoEndEvents = [];
     }
 
     const winResult = this.checkWin();
