@@ -23,6 +23,7 @@ import Visual08 from "./pages/tests/Visual08";
 import Visual09 from "./pages/tests/Visual09";
 import Visual10 from "./pages/tests/Visual10";
 import Visual13 from "./pages/tests/Visual13";
+import Visual14 from "./pages/tests/Visual14";
 import VisualAssetRegistry from "./pages/tests/VisualAssetRegistry";
 import VisualDebugContainer from "./pages/tests/VisualDebugContainer";
 import VisualStyleGuide from "./pages/tests/VisualStyleGuide";
@@ -58,6 +59,7 @@ export default function App() {
       <Route path="/tests/visual/09" element={<Visual09 />} />
       <Route path="/tests/visual/10" element={<Visual10 />} />
       <Route path="/tests/visual/13" element={<Visual13 />} />
+      <Route path="/tests/visual/14" element={<Visual14 />} />
       <Route path="/tests/visual/assets" element={<VisualAssetRegistry />} />
       <Route path="/tests/visual/debug" element={<VisualDebugContainer />} />
       <Route path="/tests/visual/style-guide" element={<VisualStyleGuide />} />

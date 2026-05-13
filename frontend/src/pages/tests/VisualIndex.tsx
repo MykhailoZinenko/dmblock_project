@@ -12,6 +12,7 @@ const tests = [
   { path: "09", label: "09 — MSDF Text" },
   { path: "10", label: "10 — ParticleContainer" },
   { path: "13", label: "13 — Hex Grid Battle" },
+  { path: "14", label: "14 — Hotseat Battle (Debug)" },
   { path: "assets", label: "Asset Registry" },
   { path: "debug", label: "Debug — Minimal Text+Sprite" },
   { path: "style-guide", label: "Style Guide — UI Components" },

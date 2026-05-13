@@ -7,28 +7,25 @@ import {
   hex2px, px2hex, isValidCell,
   GRID_COLS, GRID_ROWS, HEX_SIZE,
   P1_DEPLOY_COLS, P2_DEPLOY_COLS,
-  HERO_HP, STARTING_MANA, AUTO_END_DELAY,
+  HERO_HP, STARTING_MANA,
   ACTIVATION_TIMER_SECONDS,
-  isBarrierUp, canAttackHero, executeHeroAttack,
-  checkWinCondition, applyTimeoutDamage, HERO_HEX,
+  isBarrierUp, canAttackHero, HERO_HEX,
   GameController,
-  canSpawn, executeSpawn,
-  canCast, executeCast, getSpellTargets,
-  getReachableHexes, canMove, executeMove,
-  getAttackTargets, canAttack, executeAttack,
+  canSpawn,
+  canCast, getSpellTargets,
+  getReachableHexes, canMove,
+  getAttackTargets, canAttack,
   getAutoWalkHex, getAutoWalkTargets,
-  getCard, isBuilding, isMelee,
+  getCard, isMelee,
   CardType, SpellTargetType,
 } from '@arcana/game-core';
-import type { UnitInstance, HexCoord } from '@arcana/game-core';
+import type { HexCoord } from '@arcana/game-core';
 import { CardPicker } from '../components/CardPicker';
 import { ArcanaPanel, ArcanaButton, ArcanaBar } from '../ui/components/index';
 import { ServerConnection } from '../multiplayer/ServerConnection';
 import type { GameAction } from '../multiplayer/ServerConnection';
-import type { BattleTurnPhase as TurnPhase, BattlePriorityState as PriorityState } from './battle/battleTypes';
 import { attachBattleMultiplayer } from './battle/attachBattleMultiplayer';
 
-// ─── UI mode ───────────────────────────────────────────
 type UIMode =
   | { type: 'pick_card' }
   | { type: 'place_card'; cardId: number }
@@ -36,8 +33,6 @@ type UIMode =
   | { type: 'unit_turn' }
   | { type: 'unit_acted' }
   | { type: 'animating' };
-
-// Turn phase + priority structs: `./battle/battleTypes`.
 
 export default function Battle() {
   const navigate = useNavigate();
@@ -54,16 +49,8 @@ export default function Battle() {
   const serverRef = useRef<ServerConnection | null>(null);
   const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
   const [mySeat, setMySeat] = useState<0 | 1>(0);
-  const isMultiplayer = duelId !== null;
 
-  const sendAction = useCallback(async (action: GameAction) => {
-    if (!isMultiplayer || !serverRef.current) return;
-    await serverRef.current.sendAction(action);
-  }, [isMultiplayer]);
-
-  const [phase, setPhase] = useState<TurnPhase>({ type: 'priority', player: 0 });
   const [ui, setUI] = useState<UIMode>({ type: 'pick_card' });
-  const [priority, setPriority] = useState<PriorityState>({ p0Used: false, p1Used: false, spawnedThisTurn: new Set(), activatedThisTurn: new Set() });
   const [mana, setMana] = useState([STARTING_MANA, STARTING_MANA]);
   const [turn, setTurn] = useState(1);
   const [queueInfo, setQueueInfo] = useState<{ labels: string[]; index: number }>({ labels: [], index: 0 });
@@ -71,27 +58,15 @@ export default function Battle() {
   const [timer, setTimer] = useState(ACTIVATION_TIMER_SECONDS);
   const [gameOver, setGameOver] = useState<{ winner: number } | null>(null);
   const [barrierState, setBarrierState] = useState([true, true]);
+  const [myTurn, setMyTurn] = useState(false);
 
-  const phaseRef = useRef(phase);   phaseRef.current = phase;
-  const uiRef = useRef(ui);         uiRef.current = ui;
-  const prioRef = useRef(priority); prioRef.current = priority;
+  const uiRef = useRef(ui); uiRef.current = ui;
   const timerRef = useRef(ACTIVATION_TIMER_SECONDS);
   const gameOverRef = useRef(false);
+  const myTurnRef = useRef(false);
+  myTurnRef.current = myTurn;
 
-  const getActivePlayer = useCallback((): number => {
-    const p = phaseRef.current;
-    if (p.type === 'priority') return p.player;
-    const ctrl = ctrlRef.current;
-    if (!ctrl) return 0;
-    const cp = ctrl.getControllingPlayer();
-    return cp >= 0 ? cp : 0;
-  }, []);
-
-  const isMyTurn = useCallback((): boolean => {
-    if (!isMultiplayer) return true;
-    const activeP = getActivePlayer();
-    return activeP === mySeat;
-  }, [isMultiplayer, mySeat, getActivePlayer]);
+  // --- Sync local display state from GameController ---
 
   const syncUI = useCallback(() => {
     const ctrl = ctrlRef.current;
@@ -114,10 +89,19 @@ export default function Battle() {
       scene.updateHeroHp(1, s.players[1].heroHp, HERO_HP);
     }
 
-    const b0 = isBarrierUp(s, 0);
-    const b1 = isBarrierUp(s, 1);
-    setBarrierState([b0, b1]);
-  }, []);
+    setBarrierState([isBarrierUp(s, 0), isBarrierUp(s, 1)]);
+
+    const cu = ctrl.getCurrentUnit();
+    const isMine = cu ? cu.playerId === mySeat : false;
+    setMyTurn(isMine);
+    myTurnRef.current = isMine;
+
+    if (isMine && cu) {
+      setUI({ type: 'unit_turn' });
+      uiRef.current = { type: 'unit_turn' };
+      showActiveUnitHL();
+    }
+  }, [mySeat]);
 
   const showActiveUnitHL = useCallback(() => {
     const ctrl = ctrlRef.current;
@@ -134,19 +118,11 @@ export default function Battle() {
     for (const t of directTargets) {
       const target = ctrl.getState().units.find(u => u.uid === t.unitUid);
       if (target) {
-        attackable.push({
-          unitUid: t.unitUid,
-          cells: [...target.occupiedCells],
-          autoWalk: false,
-        });
+        attackable.push({ unitUid: t.unitUid, cells: [...target.occupiedCells], autoWalk: false });
       }
     }
     for (const t of autoWalkTgts) {
-      attackable.push({
-        unitUid: t.unitUid,
-        cells: t.cells,
-        autoWalk: true,
-      });
+      attackable.push({ unitUid: t.unitUid, cells: t.cells, autoWalk: true });
     }
 
     scene.showMoveHighlights({ col: cu.col, row: cu.row }, reachable, attackable);
@@ -157,172 +133,41 @@ export default function Battle() {
     }
   }, []);
 
-  const trackActivated = useCallback((uid: number) => {
-    const prev = prioRef.current;
-    const newActivated = new Set(prev.activatedThisTurn);
-    newActivated.add(uid);
-    const newPrio = { ...prev, activatedThisTurn: newActivated };
-    setPriority(newPrio);
-    prioRef.current = newPrio;
-  }, []);
-
   const resetTimer = useCallback(() => {
     timerRef.current = ACTIVATION_TIMER_SECONDS;
     setTimer(ACTIVATION_TIMER_SECONDS);
   }, []);
 
-  const handleWinCheck = useCallback((): boolean => {
-    const ctrl = ctrlRef.current;
-    if (!ctrl) return false;
-    const result = checkWinCondition(ctrl.getState());
-    if (result) {
-      setGameOver(result);
-      gameOverRef.current = true;
-      ctrl.getState().phase = 'GAME_OVER';
-      return true;
-    }
-    return false;
+  // --- Send intent to server (no local execution) ---
+
+  const sendAction = useCallback(async (action: GameAction) => {
+    if (!serverRef.current) return;
+    setUI({ type: 'animating' });
+    uiRef.current = { type: 'animating' };
+    sceneRef.current?.clearHighlights();
+    await serverRef.current.sendAction(action);
   }, []);
 
-  const checkBarrierChange = useCallback(() => {
+  // --- Card selection ---
+
+  const onCardSelect = useCallback((cardId: number) => {
+    if (!myTurnRef.current) return;
     const ctrl = ctrlRef.current;
     const scene = sceneRef.current;
     if (!ctrl || !scene) return;
-    const s = ctrl.getState();
-    const b0 = isBarrierUp(s, 0);
-    const b1 = isBarrierUp(s, 1);
-    setBarrierState(prev => {
-      if (prev[0] && !b0) scene.showBarrierDown(0);
-      if (prev[1] && !b1) scene.showBarrierDown(1);
-      return [b0, b1];
-    });
-  }, []);
 
-  const advanceTurn = useCallback(() => {
-    const ctrl = ctrlRef.current;
-    if (!ctrl || gameOverRef.current) return;
-    const state = ctrl.getState();
-    const prio = prioRef.current;
+    const hand = ctrl.getState().players[mySeat].hand;
+    if (!hand.includes(cardId)) return;
 
-    const p0Units = state.units.filter(u => u.alive && u.playerId === 0).length;
-    const p1Units = state.units.filter(u => u.alive && u.playerId === 1).length;
-    const p0Needs = p0Units === 0 && !prio.p0Used;
-    const p1Needs = p1Units === 0 && !prio.p1Used;
-
-    if (p0Needs && p1Needs) {
-      const first = state.rng.rollPercent(50) ? 0 : 1;
-      const next: TurnPhase = { type: 'priority', player: first };
-      setPhase(next);
-      phaseRef.current = next;
-      setUI({ type: 'pick_card' });
-      uiRef.current = { type: 'pick_card' };
-      sceneRef.current?.clearHighlights();
-      syncUI();
-      return;
-    }
-    if (p0Needs) {
-      const next: TurnPhase = { type: 'priority', player: 0 };
-      setPhase(next);
-      phaseRef.current = next;
-      setUI({ type: 'pick_card' });
-      uiRef.current = { type: 'pick_card' };
-      sceneRef.current?.clearHighlights();
-      syncUI();
-      return;
-    }
-    if (p1Needs) {
-      const next: TurnPhase = { type: 'priority', player: 1 };
-      setPhase(next);
-      phaseRef.current = next;
-      setUI({ type: 'pick_card' });
-      uiRef.current = { type: 'pick_card' };
-      sceneRef.current?.clearHighlights();
-      syncUI();
-      return;
-    }
-
-    const wasAlreadyInitiative = phaseRef.current.type === 'initiative';
-    setPhase({ type: 'initiative' });
-    phaseRef.current = { type: 'initiative' };
-
-    if (!wasAlreadyInitiative) {
-      const skipUids = new Set([...prio.spawnedThisTurn, ...prio.activatedThisTurn]);
-      if (skipUids.size > 0) {
-        state.activationQueue = state.activationQueue.filter(u => !skipUids.has(u.uid));
-        state.currentActivationIndex = 0;
-      }
-    }
-
-    if (ctrl.isQueueExhausted()) {
-      ctrl.endTurn();
-      const newPrio: PriorityState = { p0Used: false, p1Used: false, spawnedThisTurn: new Set(), activatedThisTurn: new Set() };
-      setPriority(newPrio);
-      prioRef.current = newPrio;
-      setPhase({ type: 'priority', player: 0 });
-      phaseRef.current = { type: 'priority', player: 0 };
-      advanceTurn();
-      return;
-    }
-
-    const cu = ctrl.getCurrentUnit();
-    if (cu) {
-      setUI({ type: 'unit_turn' });
-      uiRef.current = { type: 'unit_turn' };
-      resetTimer();
-      showActiveUnitHL();
-    } else {
-      setUI({ type: 'pick_card' });
-      uiRef.current = { type: 'pick_card' };
-      sceneRef.current?.clearHighlights();
-    }
-    syncUI();
-  }, [syncUI, showActiveUnitHL, resetTimer]);
-
-  const scheduleAutoEnd = useCallback(() => {
-    const ctrl = ctrlRef.current;
-    const engine = engineRef.current;
-    if (!ctrl || !engine) return;
-    const cu = ctrl.getCurrentUnit();
-    if (!cu || cu.remainingAp > 0) return;
-
-    const releasedUid = cu.uid;
-    let elapsed = 0;
-    const tick = (dt: number) => {
-      elapsed += dt;
-      if (elapsed >= AUTO_END_DELAY) {
-        engine.ticker.remove(tick);
-        trackActivated(releasedUid);
-        ctrl.passActivation();
-        sceneRef.current?.clearHighlights();
-        resetTimer();
-        advanceTurn();
-        if (isMultiplayer) {
-          sendAction({ type: 'pass' });
-        }
-      }
-    };
-    engine.ticker.add(tick);
-  }, [isMultiplayer, trackActivated, advanceTurn, resetTimer, sendAction]);
-
-  const onCardSelect = useCallback((cardId: number) => {
-    if (isMultiplayer && !isMyTurn()) return;
-    const ctrl0 = ctrlRef.current;
-    if (isMultiplayer && ctrl0) {
-      const hand = ctrl0.getState().players[mySeat].hand;
-      if (!hand.includes(cardId)) return;
-    }
     const card = getCard(cardId);
     if (card.cardType === CardType.SPELL) {
-      const ctrl = ctrlRef.current;
-      const scene = sceneRef.current;
-      if (!ctrl || !scene) return;
-      const player = getActivePlayer();
-      if (ctrl.getState().players[player].mana < card.manaCost) return;
+      const state = ctrl.getState();
+      if (state.players[mySeat].mana < card.manaCost) return;
 
       setUI({ type: 'target_spell', cardId });
       uiRef.current = { type: 'target_spell', cardId };
 
-      const validHexes = getSpellTargets(ctrl.getState(), player, cardId);
+      const validHexes = getSpellTargets(state, mySeat, cardId);
       const isHeal = cardId === 10;
       const isArea = card.spellTargetType === SpellTargetType.AREA;
       const hlType = isHeal ? 'ally' as const : isArea ? 'area' as const : 'enemy' as const;
@@ -330,77 +175,42 @@ export default function Battle() {
       return;
     }
     if (card.cardType !== CardType.UNIT) return;
-    const ctrl = ctrlRef.current;
-    const scene = sceneRef.current;
-    if (!ctrl || !scene) return;
 
     setUI({ type: 'place_card', cardId });
+    uiRef.current = { type: 'place_card', cardId };
 
-    const player = getActivePlayer();
     const state = ctrl.getState();
-    const cols = player === 0 ? P1_DEPLOY_COLS : P2_DEPLOY_COLS;
+    const cols = mySeat === 0 ? P1_DEPLOY_COLS : P2_DEPLOY_COLS;
     const validHexes: HexCoord[] = [];
     for (const col of cols) {
       for (let row = 0; row < GRID_ROWS; row++) {
-        if (canSpawn(state, player, cardId, { col, row }).valid) {
+        if (canSpawn(state, mySeat, cardId, { col, row }).valid) {
           validHexes.push({ col, row });
         }
       }
     }
     scene.showDeployHighlights(validHexes);
-  }, [getActivePlayer, isMultiplayer]);
+  }, [mySeat]);
 
   const onCardCancel = useCallback(() => {
     if (uiRef.current.type === 'target_spell') {
       setUI({ type: 'unit_turn' });
       uiRef.current = { type: 'unit_turn' };
       showActiveUnitHL();
-      return;
-    }
-    const p = phaseRef.current;
-    if (p.type === 'priority') {
-      setUI({ type: 'pick_card' });
-      sceneRef.current?.clearHighlights();
     } else {
-      setUI({ type: 'unit_turn' });
-      showActiveUnitHL();
+      setUI({ type: 'pick_card' });
+      uiRef.current = { type: 'pick_card' };
+      sceneRef.current?.clearHighlights();
     }
   }, [showActiveUnitHL]);
 
   const onPass = useCallback(() => {
-    if (isMultiplayer && !isMyTurn()) return;
-    const ctrl = ctrlRef.current;
-    if (!ctrl || gameOverRef.current) return;
+    if (!myTurnRef.current) return;
+    sendAction({ type: 'pass' });
+  }, [sendAction]);
 
-    if (phaseRef.current.type === 'priority') {
-      const player = phaseRef.current.player;
-      const prev = prioRef.current;
-      const newPrio: PriorityState = {
-        ...prev,
-        p0Used: player === 0 ? true : prev.p0Used,
-        p1Used: player === 1 ? true : prev.p1Used,
-      };
-      setPriority(newPrio);
-      prioRef.current = newPrio;
-      sceneRef.current?.clearHighlights();
-      advanceTurn();
-      sendAction({ type: 'pass', priorityPhase: true, priorityPlayerId: player });
-      return;
-    }
+  // --- Hex click handler (intent-only, no local execution) ---
 
-    const cu = ctrl.getCurrentUnit();
-    const releasedUid = cu?.uid;
-    if (cu) trackActivated(cu.uid);
-    ctrl.passActivation();
-    sceneRef.current?.clearHighlights();
-    resetTimer();
-    advanceTurn();
-    sendAction(
-      releasedUid !== undefined ? { type: 'pass', releasedUnitUid: releasedUid } : { type: 'pass' },
-    );
-  }, [advanceTurn, trackActivated, resetTimer, sendAction]);
-
-  // ─── Hex click handler ──────────────────────────────
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -408,337 +218,99 @@ export default function Battle() {
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
       if (!ctrl || !scene) return;
-      if (isMultiplayer && !isMyTurn()) return;
-      const state = ctrl.getState();
-      const currentUI = uiRef.current;
-      const currentPhase = phaseRef.current;
+      if (!myTurnRef.current) return;
+      if (gameOverRef.current) return;
 
+      const currentUI = uiRef.current;
       if (currentUI.type === 'animating') return;
 
-      if (
-        isMultiplayer &&
-        (currentUI.type === 'unit_turn' || currentUI.type === 'unit_acted')
-      ) {
-        const cu0 = ctrl.getCurrentUnit();
-        if (cu0 && cu0.playerId !== mySeat) return;
-      }
+      const state = ctrl.getState();
 
-      // ── Cast spell ──
+      // -- Cast spell --
       if (currentUI.type === 'target_spell') {
-        const player = getActivePlayer();
-        const spellCardId = currentUI.cardId;
-        if (!canCast(state, player, spellCardId, { col, row }).valid) return;
-
-        setUI({ type: 'animating' });
-        uiRef.current = { type: 'animating' };
-        scene.clearHighlights();
-
-        const result = executeCast(state, player, spellCardId, { col, row });
-        sendAction({ type: 'cast', playerId: player, cardId: spellCardId, col, row });
-        const targetHex = { col, row };
-
-        const finishSpellCast = () => {
-          checkBarrierChange();
-          syncUI();
-          resetTimer();
-          if (handleWinCheck()) return;
-          if (currentPhase.type === 'priority') {
-            const prev = prioRef.current;
-            const newPrio: PriorityState = {
-              ...prev,
-              p0Used: player === 0 ? true : prev.p0Used,
-              p1Used: player === 1 ? true : prev.p1Used,
-            };
-            setPriority(newPrio);
-            prioRef.current = newPrio;
-          } else {
-            const cu = ctrl.getCurrentUnit();
-            if (cu) trackActivated(cu.uid);
-            ctrl.passActivation();
-          }
-          setTimeout(() => advanceTurn(), 400);
-        };
-
-        if (!result.success) {
-          scene.showFizzle(targetHex);
-          finishSpellCast();
-          return;
-        }
-
-        scene.playSpellFx(spellCardId, targetHex, () => {
-          for (const a of result.affectedUnits) {
-            const u = state.units.find(x => x.uid === a.uid);
-            if (!u) continue;
-            if (a.healed !== undefined && a.healed > 0) {
-              scene.showHealNumber({ col: u.col, row: u.row }, a.healed);
-              scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
-            }
-            if (a.damage !== undefined && a.damage > 0) {
-              scene.showDamageNumber({ col: u.col, row: u.row }, a.damage, false);
-              scene.updateHpBar(u.uid, u.currentHp, u.maxHp);
-            }
-            if (a.died) {
-              scene.playDeath(u.uid, () => {});
-            }
-            if (a.statusApplied) {
-              const statusLabel = a.statusApplied === 'slow' ? 'SLOWED'
-                : a.statusApplied === 'polymorph' ? 'POLYMORPHED'
-                : 'CURSED';
-              scene.showStatusText({ col: u.col, row: u.row }, statusLabel);
-              if (a.statusApplied === 'polymorph') {
-                scene.swapToSheep(u.uid);
-              }
-            }
-          }
-          if (result.heroDamage) {
-            scene.showHeroDamage(result.heroDamage.playerId, result.heroDamage.damage, false);
-          }
-          finishSpellCast();
-        });
+        if (!canCast(state, mySeat, currentUI.cardId, { col, row }).valid) return;
+        sendAction({ type: 'cast', playerId: mySeat, cardId: currentUI.cardId, col, row });
         return;
       }
 
-      // ── Place card ──
+      // -- Place card (spawn) --
       if (currentUI.type === 'place_card') {
-        const player = getActivePlayer();
-        const result = canSpawn(state, player, currentUI.cardId, { col, row });
-        if (!result.valid) return;
-
-        const unit = executeSpawn(state, player, currentUI.cardId, { col, row });
-        scene.spawnUnit(unit);
-
-        if (currentPhase.type === 'priority') {
-          ctrl.rebuildQueue();
-          const prev = prioRef.current;
-          const newSpawned = new Set(prev.spawnedThisTurn);
-          newSpawned.add(unit.uid);
-          const newPrio: PriorityState = {
-            p0Used: player === 0 ? true : prev.p0Used,
-            p1Used: player === 1 ? true : prev.p1Used,
-            spawnedThisTurn: newSpawned,
-            activatedThisTurn: prev.activatedThisTurn,
-          };
-          setPriority(newPrio);
-          prioRef.current = newPrio;
-          scene.clearHighlights();
-          advanceTurn();
-        } else {
-          const prev = prioRef.current;
-          const newSpawned = new Set(prev.spawnedThisTurn);
-          newSpawned.add(unit.uid);
-          const newPrio = { ...prev, spawnedThisTurn: newSpawned };
-          setPriority(newPrio);
-          prioRef.current = newPrio;
-          ctrl.passActivation();
-          scene.clearHighlights();
-          advanceTurn();
-        }
-        sendAction({
-          type: 'spawn',
-          playerId: player,
-          cardId: currentUI.cardId,
-          col,
-          row,
-          priorityPhase: currentPhase.type === 'priority',
-        });
+        if (!canSpawn(state, mySeat, currentUI.cardId, { col, row }).valid) return;
+        sendAction({ type: 'spawn', playerId: mySeat, cardId: currentUI.cardId, col, row });
         return;
       }
 
       if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
 
       const cu = ctrl.getCurrentUnit();
-      if (!cu) return;
+      if (!cu || cu.playerId !== mySeat) return;
 
-      // ── Click on enemy ──
-      // First check exact hex, then check nearby hexes (sprites render above their hex
-      // due to anchor offset, so clicks on the sprite body may resolve to a neighbor hex)
+      // -- Click on enemy unit --
       let targetUnit = state.units.find(u =>
         u.alive && u.playerId !== cu.playerId &&
         u.occupiedCells.some(c => c.col === col && c.row === row),
       );
       if (!targetUnit) {
-        // Check if any attackable enemy is on a hex adjacent to the clicked hex
         const directTargets = getAttackTargets(state, cu.uid);
         const autoWalkTgts = getAutoWalkTargets(state, cu.uid);
         const allTargetUids = new Set([
           ...directTargets.map(t => t.unitUid),
           ...autoWalkTgts.map(t => t.unitUid),
         ]);
-        // Find the closest enemy unit to the click position
         let bestDist = Infinity;
         for (const uid of allTargetUids) {
           const u = state.units.find(x => x.uid === uid);
           if (!u) continue;
           for (const cell of u.occupiedCells) {
-            // Only consider enemies whose cells are on or adjacent to the clicked hex
             const dist = Math.abs(cell.col - col) + Math.abs(cell.row - row);
             if (dist <= 1) {
               const p = hex2px(cell.col, cell.row);
               const d = (p.x - worldX) ** 2 + (p.y - worldY) ** 2;
-              if (d < bestDist) {
-                bestDist = d;
-                targetUnit = u;
-              }
+              if (d < bestDist) { bestDist = d; targetUnit = u; }
             }
           }
         }
       }
 
       if (targetUnit) {
-        const finishMeleeAttack = (atkResult: ReturnType<typeof executeAttack>) => {
-          scene.showDamageNumber(
-            { col: targetUnit.col, row: targetUnit.row },
-            atkResult.damage, atkResult.isCrit,
-          );
-          if (atkResult.targetDied) {
-            scene.playDeath(targetUnit.uid, () => {});
-            checkBarrierChange();
-          }
-
-          if (atkResult.retaliation && !atkResult.targetDied) {
-            scene.playAttack(targetUnit.uid, { col: cu.col, row: cu.row }, () => {
-              scene.updateHpBar(cu.uid, cu.currentHp, cu.maxHp);
-              scene.showDamageNumber(
-                { col: cu.col, row: cu.row },
-                atkResult.retaliation!.damage, atkResult.retaliation!.isCrit,
-              );
-              if (atkResult.retaliation!.attackerDied) {
-                scene.playDeath(cu.uid, () => {});
-                checkBarrierChange();
-              }
-              syncUI();
-              resetTimer();
-              scheduleAutoEnd();
-              setUI({ type: 'unit_acted' });
-              uiRef.current = { type: 'unit_acted' };
-            });
-          } else {
-            syncUI();
-            resetTimer();
-            scheduleAutoEnd();
-            setUI({ type: 'unit_acted' });
-            uiRef.current = { type: 'unit_acted' };
-          }
-        };
-
-        // Direct attack?
         if (canAttack(state, cu.uid, targetUnit.uid).valid) {
-          setUI({ type: 'animating' });
-          uiRef.current = { type: 'animating' };
-          scene.clearHighlights();
-
-          const attackResult = executeAttack(state, cu.uid, targetUnit.uid);
           sendAction({ type: 'attack', attackerUid: cu.uid, targetUid: targetUnit.uid });
-          scene.updateHpBar(targetUnit.uid, targetUnit.currentHp, targetUnit.maxHp);
-
-          if (attackResult.attackType === 'ranged') {
-            scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
-              scene.animateProjectile(
-                { col: cu.col, row: cu.row },
-                { col: targetUnit.col, row: targetUnit.row },
-                () => {
-                  scene.showDamageNumber(
-                    { col: targetUnit.col, row: targetUnit.row },
-                    attackResult.damage, attackResult.isCrit,
-                  );
-                  if (attackResult.targetDied) {
-                    scene.playDeath(targetUnit.uid, () => {});
-                    checkBarrierChange();
-                  }
-                  syncUI();
-                  resetTimer();
-                  scheduleAutoEnd();
-                  setUI({ type: 'unit_acted' });
-                  uiRef.current = { type: 'unit_acted' };
-                },
-              );
-            });
-          } else {
-            scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
-              finishMeleeAttack(attackResult);
-            });
-          }
           return;
         }
-
-        // Auto-walk melee attack?
         const card = getCard(cu.cardId);
         if (isMelee(card)) {
           const walkHex = getAutoWalkHex(state, cu.uid, targetUnit.uid, { x: worldX, y: worldY });
           if (walkHex) {
-            setUI({ type: 'animating' });
-            uiRef.current = { type: 'animating' };
-            scene.clearHighlights();
-
-            const path = executeMove(state, cu.uid, walkHex);
-            sendAction({
-              type: 'move',
-              unitUid: cu.uid,
-              col: walkHex.col,
-              row: walkHex.row,
-              path: path.map((h) => ({ col: h.col, row: h.row })),
-            });
-            scene.moveUnit(cu.uid, path, () => {
-              const attackResult = executeAttack(state, cu.uid, targetUnit.uid);
-              sendAction({ type: 'attack', attackerUid: cu.uid, targetUid: targetUnit.uid });
-              scene.updateHpBar(targetUnit.uid, targetUnit.currentHp, targetUnit.maxHp);
-
-              scene.playAttack(cu.uid, { col: targetUnit.col, row: targetUnit.row }, () => {
-                finishMeleeAttack(attackResult);
-              });
-            });
+            sendAction({ type: 'move', unitUid: cu.uid, col: walkHex.col, row: walkHex.row });
+            // Attack will be sent after server confirms move and client re-evaluates
             return;
           }
         }
         return;
       }
 
-      // ── Move (not clicking enemy) ──
+      // -- Move (not clicking enemy) --
       if (currentUI.type === 'unit_acted') return;
       if (!canMove(state, cu.uid, { col, row }).valid) return;
-
-      setUI({ type: 'animating' });
-      uiRef.current = { type: 'animating' };
-      scene.clearHighlights();
-
-      const path = executeMove(state, cu.uid, { col, row });
-      sendAction({
-        type: 'move',
-        unitUid: cu.uid,
-        col,
-        row,
-        path: path.map((h) => ({ col: h.col, row: h.row })),
-      });
-      scene.moveUnit(cu.uid, path, () => {
-        setUI({ type: 'unit_turn' });
-        uiRef.current = { type: 'unit_turn' };
-        resetTimer();
-        if (cu.remainingAp > 0) {
-          showActiveUnitHL();
-        } else {
-          scheduleAutoEnd();
-        }
-        syncUI();
-      });
+      sendAction({ type: 'move', unitUid: cu.uid, col, row });
     };
 
     window.addEventListener('hex-click', handler);
     return () => window.removeEventListener('hex-click', handler);
-  }, [getActivePlayer, advanceTurn, showActiveUnitHL, syncUI, scheduleAutoEnd, sendAction]);
+  }, [mySeat, sendAction]);
 
-  // ─── Offgrid click (hero marker — unit attack or spell) ──
+  // --- Offgrid click (hero markers) ---
+
   useEffect(() => {
     const handler = (e: Event) => {
       const { worldX, worldY } = (e as CustomEvent).detail;
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
       if (!ctrl || !scene || gameOverRef.current) return;
-      if (isMultiplayer && !isMyTurn()) return;
+      if (!myTurnRef.current) return;
       const currentUI = uiRef.current;
-      const currentPhase = phaseRef.current;
       const state = ctrl.getState();
 
-      // Which hero marker was clicked?
       let clickedPid = -1;
       for (const pid of [0, 1]) {
         const pos = scene.getHeroWorldPos(pid);
@@ -747,131 +319,41 @@ export default function Battle() {
       }
       if (clickedPid < 0) return;
 
-      // ── Spell targeting hero ──
+      // Spell targeting hero
       if (currentUI.type === 'target_spell') {
-        const player = getActivePlayer();
-        const spellCardId = currentUI.cardId;
         const heroHex = HERO_HEX[clickedPid];
-        if (!canCast(state, player, spellCardId, heroHex).valid) return;
-
-        setUI({ type: 'animating' });
-        uiRef.current = { type: 'animating' };
-        scene.clearHighlights();
-
-        const result = executeCast(state, player, spellCardId, heroHex);
-        sendAction({ type: 'cast', playerId: player, cardId: spellCardId, col: heroHex.col, row: heroHex.row });
-
-        const finishSpellOnHero = () => {
-          checkBarrierChange();
-          syncUI();
-          resetTimer();
-          if (handleWinCheck()) return;
-          if (currentPhase.type === 'priority') {
-            const prev = prioRef.current;
-            const newPrio: PriorityState = {
-              ...prev,
-              p0Used: player === 0 ? true : prev.p0Used,
-              p1Used: player === 1 ? true : prev.p1Used,
-            };
-            setPriority(newPrio);
-            prioRef.current = newPrio;
-          } else {
-            const cu = ctrl.getCurrentUnit();
-            if (cu) trackActivated(cu.uid);
-            ctrl.passActivation();
-          }
-          setTimeout(() => advanceTurn(), 400);
-        };
-
-        if (!result.success) {
-          scene.showFizzle(heroHex);
-          finishSpellOnHero();
-          return;
-        }
-
-        scene.playSpellFx(spellCardId, heroHex, () => {
-          if (result.heroDamage) {
-            scene.showHeroDamage(result.heroDamage.playerId, result.heroDamage.damage, false);
-          }
-          finishSpellOnHero();
-        });
+        if (!canCast(state, mySeat, currentUI.cardId, heroHex).valid) return;
+        sendAction({ type: 'cast', playerId: mySeat, cardId: currentUI.cardId, col: heroHex.col, row: heroHex.row });
         return;
       }
 
-      // ── Unit attack on hero marker ──
+      // Unit attack on hero
       if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
       const cu = ctrl.getCurrentUnit();
-      if (!cu) return;
-      if (isMultiplayer && cu.playerId !== mySeat) return;
+      if (!cu || cu.playerId !== mySeat) return;
       const enemyPid = cu.playerId === 0 ? 1 : 0;
       if (clickedPid !== enemyPid) return;
       if (!canAttackHero(state, cu.uid, enemyPid).valid) return;
-
-      setUI({ type: 'animating' });
-      uiRef.current = { type: 'animating' };
-      scene.clearHighlights();
-
-      const heroResult = executeHeroAttack(state, cu.uid, enemyPid);
       sendAction({ type: 'attack-hero', attackerUid: cu.uid, targetPlayerId: enemyPid });
-      scene.showHeroDamage(enemyPid, heroResult.damage, heroResult.isCrit);
-      syncUI();
-      resetTimer();
-
-      if (handleWinCheck()) return;
-
-      scheduleAutoEnd();
-      setUI({ type: 'unit_acted' });
-      uiRef.current = { type: 'unit_acted' };
     };
 
     window.addEventListener('offgrid-click', handler);
     return () => window.removeEventListener('offgrid-click', handler);
-  }, [getActivePlayer, syncUI, resetTimer, handleWinCheck, scheduleAutoEnd, advanceTurn, trackActivated, checkBarrierChange]);
+  }, [mySeat, sendAction]);
 
-  // ─── Activation timer ──────────────────────────────
+  // --- Timer (display-only, server enforces) ---
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (gameOverRef.current) return;
-      const ctrl = ctrlRef.current;
-      const scene = sceneRef.current;
-      if (!ctrl || !scene) return;
-      const currentUI = uiRef.current;
-      const currentPhase = phaseRef.current;
-
-      if (currentPhase.type === 'priority') return;
-      if (currentUI.type === 'animating') return;
-      if (currentUI.type === 'pick_card') return;
-
       timerRef.current -= 1;
-      const t = timerRef.current;
-      setTimer(t);
-
-      if (t <= 0) {
-        const cu = ctrl.getCurrentUnit();
-        if (!cu) return;
-
-        const result = applyTimeoutDamage(ctrl.getState(), cu.playerId);
-        scene.showStampDamage(cu.playerId, result.damage);
-        syncUI();
-
-        if (handleWinCheck()) return;
-
-        const releasedUid = cu.uid;
-        trackActivated(releasedUid);
-        ctrl.passActivation();
-        scene.clearHighlights();
-        resetTimer();
-        advanceTurn();
-        if (isMultiplayer) {
-          sendAction({ type: 'pass' });
-        }
-      }
+      setTimer(Math.max(0, timerRef.current));
     }, 1000);
-
     return () => clearInterval(interval);
-  }, [syncUI, handleWinCheck, advanceTurn, resetTimer, isMultiplayer, sendAction, trackActivated]);
+  }, []);
 
-  // ─── Engine init ────────────────────────────────────
+  // --- Engine init ---
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -889,22 +371,11 @@ export default function Battle() {
       const ctrl = new GameController();
       ctrlRef.current = ctrl;
 
-      if (!isMultiplayer) {
-        ctrl.startGame(Date.now());
-      }
-
       const scene = new BattleScene(engine);
       scene.createGrid();
       scene.createHeroMarkers();
       await scene.preloadSheep();
       sceneRef.current = scene;
-
-      ctrl.on('effectExpired', (data: { uid: number }) => {
-        const unit = ctrl.getState().units.find(u => u.uid === data.uid);
-        if (unit && !unit.polymorphed) {
-          scene.restoreFromSheep(data.uid);
-        }
-      });
 
       const mid = hex2px((GRID_COLS - 1) / 2, (GRID_ROWS - 1) / 2);
       engine.camera.position.set(mid.x, mid.y);
@@ -970,73 +441,74 @@ export default function Battle() {
     };
   }, []);
 
-  // ─── Multiplayer session ──
+  // --- Multiplayer session ---
+
   useEffect(() => {
-    if (!isMultiplayer || !address || duelId === null) return;
+    if (!address || duelId === null) return;
     return attachBattleMultiplayer({
       duelId,
       address,
       serverRef,
       getCtrl: () => ctrlRef.current,
       getScene: () => sceneRef.current,
-      phaseRef,
-      setPhase,
+      phaseRef: { current: { type: 'initiative' } },
+      setPhase: () => {},
       syncUI,
       resetTimer,
       setMultiplayerStatus,
       setGameOver: (result) => {
         setGameOver(result);
         gameOverRef.current = true;
-        const c = ctrlRef.current;
-        if (c?.isGameStarted()) {
-          c.getState().phase = 'GAME_OVER';
-        }
       },
       setMySeat,
       signTypedData: signTypedDataAsync,
     });
-  }, [duelId, address, isMultiplayer, syncUI, resetTimer, signTypedDataAsync]);
+  }, [duelId, address, syncUI, resetTimer, signTypedDataAsync]);
 
-  // Belt-and-suspenders: if hero HP diverged without firing win handlers, still end the duel.
-  useEffect(() => {
-    if (!isMultiplayer || gameOver !== null) return;
-    const ctrl = ctrlRef.current;
-    if (!ctrl?.isGameStarted() || gameOverRef.current) return;
-    const r = checkWinCondition(ctrl.getState());
-    if (r) {
-      setGameOver(r);
-      gameOverRef.current = true;
-      ctrl.getState().phase = 'GAME_OVER';
-    }
-  }, [heroHp, isMultiplayer, gameOver]);
+  // --- Derived display values ---
 
-  // ─── Derived display values ─────────────────────────
-  const activePlayer = getActivePlayer();
-  const isPriority = phase.type === 'priority';
+  const ctrl = ctrlRef.current;
+  const currentUnit = ctrl?.getCurrentUnit();
+  const isAnimating = ui.type === 'animating';
   const isPlacing = ui.type === 'place_card';
   const isTargetingSpell = ui.type === 'target_spell';
-  const isAnimating = ui.type === 'animating';
-  const mpNotMyTurn = isMultiplayer && !isMyTurn();
-  const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating || mpNotMyTurn;
-  const showPassBtn = (phase.type === 'initiative' && (ui.type === 'unit_turn' || ui.type === 'unit_acted'))
-    || (phase.type === 'priority' && ui.type === 'pick_card');
-  const currentUnit = ctrlRef.current?.getCurrentUnit();
+  const showPassBtn = !isAnimating && !gameOver && myTurn &&
+    (ui.type === 'unit_turn' || ui.type === 'unit_acted' || ui.type === 'pick_card');
+  const cardPickerDisabled = ui.type === 'unit_acted' || isAnimating || !myTurn;
 
   let statusText = '';
-  if (isPriority) {
-    statusText = `P${phase.player + 1} — Deploy a unit`;
-  } else if (currentUnit) {
+  if (currentUnit) {
     const card = getCard(currentUnit.cardId);
-    statusText = `P${activePlayer + 1} — ${card.name} (AP: ${currentUnit.remainingAp}/${currentUnit.speed})`;
+    statusText = `${currentUnit.playerId === mySeat ? 'Your' : "Opponent's"} ${card.name} (AP: ${currentUnit.remainingAp}/${currentUnit.speed})`;
   } else {
-    statusText = `P${activePlayer + 1}`;
+    statusText = myTurn ? 'Your turn — deploy a unit' : "Opponent's turn";
+  }
+
+  if (!duelId || !address) {
+    return (
+      <div style={{
+        width: '100vw', height: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--font-display)', color: 'var(--color-text)',
+        background: '#1a2a1a',
+      }}>
+        <ArcanaPanel variant="slate">
+          <div style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 18, marginBottom: 12 }}>No duel selected</div>
+            <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
+              Go to Duel Lobby
+            </ArcanaButton>
+          </div>
+        </ArcanaPanel>
+      </div>
+    );
   }
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} onContextMenu={e => e.preventDefault()} />
 
-      {/* ─── Top Bar ───────────────────────────────── */}
+      {/* --- Top Bar --- */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10,
         pointerEvents: 'none',
@@ -1054,7 +526,9 @@ export default function Battle() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {/* P1 stats */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: '#6699ff', fontSize: 'var(--text-xs)' }}>P1</span>
+                <span style={{ color: '#6699ff', fontSize: 'var(--text-xs)' }}>
+                  {mySeat === 0 ? 'You' : 'Opp'}
+                </span>
                 <div style={{ width: 60 }}>
                   <ArcanaBar value={heroHp[0]} max={HERO_HP} color={heroHp[0] <= 10 ? 'red' : 'green'}>
                     <span style={{ fontSize: 'var(--text-xs)' }}>{heroHp[0]}</span>
@@ -1066,14 +540,10 @@ export default function Battle() {
                     <span style={{ fontSize: 'var(--text-xs)' }}>{mana[0]}</span>
                   </ArcanaBar>
                 </div>
-                <span
-                  onClick={() => { const c = ctrlRef.current; if (c?.isGameStarted()) { c.getState().players[0].mana += 5; syncUI(); } }}
-                  style={{ cursor: 'pointer', color: '#6699ff', fontSize: 'var(--text-xs)', opacity: 0.6 }}
-                >+5</span>
               </div>
 
               {/* Timer */}
-              {!isPriority && !gameOver && (
+              {!gameOver && (
                 <div style={{ width: 60 }}>
                   <ArcanaBar
                     value={timer}
@@ -1090,7 +560,9 @@ export default function Battle() {
 
               {/* P2 stats */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: '#ff6666', fontSize: 'var(--text-xs)' }}>P2</span>
+                <span style={{ color: '#ff6666', fontSize: 'var(--text-xs)' }}>
+                  {mySeat === 1 ? 'You' : 'Opp'}
+                </span>
                 <div style={{ width: 60 }}>
                   <ArcanaBar value={heroHp[1]} max={HERO_HP} color={heroHp[1] <= 10 ? 'red' : 'green'}>
                     <span style={{ fontSize: 'var(--text-xs)' }}>{heroHp[1]}</span>
@@ -1102,17 +574,13 @@ export default function Battle() {
                     <span style={{ fontSize: 'var(--text-xs)' }}>{mana[1]}</span>
                   </ArcanaBar>
                 </div>
-                <span
-                  onClick={() => { const c = ctrlRef.current; if (c?.isGameStarted()) { c.getState().players[1].mana += 5; syncUI(); } }}
-                  style={{ cursor: 'pointer', color: '#ff6666', fontSize: 'var(--text-xs)', opacity: 0.6 }}
-                >+5</span>
               </div>
             </div>
           </div>
         </ArcanaPanel>
       </div>
 
-      {/* ─── Initiative Sidebar ────────────────────── */}
+      {/* --- Initiative Sidebar --- */}
       <div style={{
         position: 'fixed', top: 80, right: 8, zIndex: 10,
         width: 160, maxHeight: 'calc(100vh - 280px)', overflowY: 'auto',
@@ -1148,8 +616,8 @@ export default function Battle() {
         </ArcanaPanel>
       </div>
 
-      {/* ─── Action Buttons ────────────────────────── */}
-      {showPassBtn && !isAnimating && (
+      {/* --- Pass Button --- */}
+      {showPassBtn && (
         <div style={{
           position: 'fixed', bottom: 190, left: '50%', transform: 'translateX(-50%)',
           display: 'flex', gap: 10, zIndex: 101,
@@ -1158,8 +626,8 @@ export default function Battle() {
         </div>
       )}
 
-      {/* ─── Multiplayer Status Overlay ──────────── */}
-      {isMultiplayer && multiplayerStatus && (
+      {/* --- Status Overlay --- */}
+      {multiplayerStatus && (
         <div style={{
           position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(0,0,0,0.8)', color: 'var(--color-gold)',
@@ -1171,18 +639,18 @@ export default function Battle() {
         </div>
       )}
 
-      {isMultiplayer && !multiplayerStatus && serverRef.current?.state === 'playing' && (
+      {!multiplayerStatus && serverRef.current?.state === 'playing' && (
         <div style={{
           position: 'fixed', top: 48, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.6)', color: isMyTurn() ? '#66ff66' : '#ff6666',
+          background: 'rgba(0,0,0,0.6)', color: myTurn ? '#66ff66' : '#ff6666',
           padding: '4px 16px', borderRadius: 8, fontSize: 13, zIndex: 100,
           fontFamily: 'var(--font-display)',
         }}>
-          {isMyTurn() ? 'Your turn' : "Opponent's turn"}
+          {myTurn ? 'Your turn' : "Opponent's turn"}
         </div>
       )}
 
-      {/* ─── Game Over Overlay ──────────────────── */}
+      {/* --- Game Over --- */}
       {gameOver && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
@@ -1198,42 +666,33 @@ export default function Battle() {
                 fontSize: '32px', color: 'var(--color-gold)',
                 marginBottom: 12,
               }}>
-                {gameOver.winner < 0 ? 'MATCH ENDED' : `P${gameOver.winner + 1} WINS!`}
+                {gameOver.winner === mySeat ? 'VICTORY!' : 'DEFEAT'}
               </div>
               <div style={{ fontSize: 'var(--text-sm)', marginBottom: 16, opacity: 0.8 }}>
-                {gameOver.winner < 0
-                  ? 'The duel concluded without a ranked winner.'
-                  : 'The opposing hero has fallen.'}
+                {gameOver.winner === mySeat
+                  ? 'The opposing hero has fallen.'
+                  : 'Your hero has been defeated.'}
               </div>
-              {isMultiplayer ? (
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
-                    Return to lobby
-                  </ArcanaButton>
-                  <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
-                    Reload battle
-                  </ArcanaButton>
-                </div>
-              ) : (
-                <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
-                  New Battle
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <ArcanaButton variant="blue" size="md" onClick={() => navigate('/duels')}>
+                  Return to lobby
                 </ArcanaButton>
-              )}
+              </div>
             </div>
           </ArcanaPanel>
         </div>
       )}
 
-      {/* ─── Card Picker ──────────────────────────── */}
+      {/* --- Card Picker --- */}
       <CardPicker
         currentMana={
-          isMultiplayer && ctrlRef.current?.isGameStarted()
-            ? ctrlRef.current.getState().players[mySeat].mana
-            : mana[activePlayer]
+          ctrl?.isGameStarted()
+            ? ctrl.getState().players[mySeat].mana
+            : mana[mySeat]
         }
         handCardIds={
-          isMultiplayer && ctrlRef.current?.isGameStarted()
-            ? ctrlRef.current.getState().players[mySeat].hand
+          ctrl?.isGameStarted()
+            ? ctrl.getState().players[mySeat].hand
             : undefined
         }
         onCardSelect={onCardSelect}
