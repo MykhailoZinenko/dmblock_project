@@ -444,7 +444,7 @@ export default function Battle() {
   // --- Multiplayer session ---
 
   useEffect(() => {
-    if (!address || duelId === null) return;
+    if (duelId === null || !address) return;
     return attachBattleMultiplayer({
       duelId,
       address,
@@ -484,7 +484,7 @@ export default function Battle() {
     statusText = myTurn ? 'Your turn — deploy a unit' : "Opponent's turn";
   }
 
-  if (!duelId || !address) {
+  if (duelId === null || !address) {
     return (
       <div style={{
         width: '100vw', height: '100vh', display: 'flex',
