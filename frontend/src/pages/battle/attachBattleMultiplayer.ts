@@ -135,6 +135,8 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
 // ── Play animations from events (visuals only, no state mutation) ──
 
 function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEvent[]): void {
+  const deathsHandledByAttack = new Set<number>();
+
   for (let i = 0; i < events.length; i++) {
     const event = events[i];
     switch (event.type) {
@@ -168,6 +170,8 @@ function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEv
       case 'unit-attacked': {
         const target = state.units.find(u => u.uid === event.targetUid);
         const attacker = state.units.find(u => u.uid === event.attackerUid);
+        if (event.targetHp <= 0) deathsHandledByAttack.add(event.targetUid);
+        if (event.attackerHp <= 0) deathsHandledByAttack.add(event.attackerUid);
         if (attacker && target) {
           playAttackWithRetaliation(scene, event, attacker, target);
         }
@@ -180,7 +184,9 @@ function playEventsOnScene(scene: BattleScene, state: GameState, events: MatchEv
         break;
 
       case 'unit-died':
-        scene.playDeath(event.uid, () => {});
+        if (!deathsHandledByAttack.has(event.uid)) {
+          scene.playDeath(event.uid, () => {});
+        }
         break;
 
       case 'spell-cast':
@@ -226,10 +232,16 @@ function playAttackWithRetaliation(
   scene.playAttack(attacker.uid, { col: target.col, row: target.row }, () => {
     scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
     scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
-    if (event.retaliation > 0) {
+    if (event.targetHp <= 0) {
+      scene.playDeath(target.uid, () => {});
+    }
+    if (event.retaliation > 0 && event.targetHp > 0) {
       scene.playAttack(target.uid, { col: attacker.col, row: attacker.row }, () => {
         scene.updateHpBar(attacker.uid, event.attackerHp, attacker.maxHp);
         scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
+        if (event.attackerHp <= 0) {
+          scene.playDeath(attacker.uid, () => {});
+        }
       });
     }
   });
