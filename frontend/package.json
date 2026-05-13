@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "redeploy:anvil": "bash ../scripts/redeploy-anvil.sh",
     "dev": "vite",
     "sync-abi": "node scripts/sync-abi.mjs",
     "update-twap": "node scripts/update-twap.mjs",
@@ -14,6 +15,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@arcana/game-core": "*",
     "@tanstack/react-query": "^5.99.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
