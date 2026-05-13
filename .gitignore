@@ -15,8 +15,8 @@ frontend/dist/
 .env
 .env.local
 
-# Generated ABIs (regenerate with: cd frontend && npm run sync-abi)
-frontend/src/abi/
+# Generated ABIs — committed for builds
+# Regenerate with: cd frontend && npm run sync-abi
 
 # OS
 .DS_Store
