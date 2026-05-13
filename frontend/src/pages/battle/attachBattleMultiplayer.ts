@@ -37,7 +37,16 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
 
   conn.on('auth-challenge', (nonce: string) => {
     p.setMultiplayerStatus('Signing session...');
-    conn.authenticate(p.signTypedData, nonce).then(() => {
+    conn.authenticate(p.signTypedData, nonce).catch(() => {
+      p.setMultiplayerStatus('Wallet signature rejected.');
+    });
+  });
+
+  conn.on('state-change', (state) => {
+    if (state === 'waiting') {
+      // auth-ok received — now safe to submit deck
+      if (deckSubmitted) return;
+      deckSubmitted = true;
       p.setMultiplayerStatus('Authenticated. Submitting deck...');
       const decks = listDecks(p.address);
       const validDeck = decks.find(d => d.slots.filter(s => s !== null).length === DECK_SIZE);
@@ -48,14 +57,9 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
       const deckIds = validDeck.slots.filter((s): s is number => s !== null);
       conn.submitDeck(deckIds);
       p.setMultiplayerStatus('Deck submitted. Waiting for opponent...');
-    }).catch(() => {
-      p.setMultiplayerStatus('Wallet signature rejected.');
-    });
+    }
   });
-
-  conn.on('waiting-for-opponent' as any, () => {
-    p.setMultiplayerStatus('Waiting for opponent...');
-  });
+  let deckSubmitted = false;
 
   conn.on('match-started', (state: SerializedGameState, seat: 0 | 1, _opponent: string, _seq: number, controllingPlayer: number) => {
     p.setMySeat(seat);
