@@ -117,13 +117,12 @@ function handleGameOver(room: Room): void {
   (room as any)._results = results;
 
   // Arbiter fallback after timeout if both sigs not collected
-  (room as any)._arbiterTimer = setTimeout(() => {
+  (room as any)._arbiterTimer = setTimeout(async () => {
     if (sigs[0] && sigs[1]) return;
     console.log(`Arbiter fallback for duel ${room.duelId} — not all players signed`);
-    settleOnChain(room.duelId, winnerAddress).then(txHash => {
-      if (txHash) broadcast(room, { type: 'duel-settled', txHash });
-    });
-    grantXp(room, winner, isDraw, results);
+    const txHash = await settleOnChain(room.duelId, winnerAddress);
+    if (txHash) broadcast(room, { type: 'duel-settled', txHash });
+    await grantXp(room, winner, isDraw, results);
   }, ARBITER_SETTLE_TIMEOUT_MS);
 }
 
@@ -143,31 +142,31 @@ function tryDualSigSettle(room: Room): void {
   }
 
   console.log(`Dual-sig settlement for duel ${room.duelId}`);
-  settleDualSig(room.duelId, winnerAddress, sigs[0], sigs[1]).then(txHash => {
+  settleDualSig(room.duelId, winnerAddress, sigs[0], sigs[1]).then(async txHash => {
     if (txHash) {
       broadcast(room, { type: 'duel-settled', txHash });
     } else {
-      // Dual-sig failed, fall back to arbiter
-      settleOnChain(room.duelId, winnerAddress).then(h => {
-        if (h) broadcast(room, { type: 'duel-settled', txHash: h });
-      });
+      const h = await settleOnChain(room.duelId, winnerAddress);
+      if (h) broadcast(room, { type: 'duel-settled', txHash: h });
     }
+    await grantXp(room, winner ?? -1, isDraw, results);
   });
-  grantXp(room, winner ?? -1, isDraw, results);
 }
 
-function grantXp(room: Room, winner: number, isDraw: boolean, results: any): void {
+async function grantXp(room: Room, winner: number, isDraw: boolean, results: any): Promise<void> {
   const heroNftAddress = process.env.HERO_NFT_ADDRESS;
   if (!heroNftAddress) return;
   const p0 = room.players[0];
   const p1 = room.players[1];
   if (p0?.heroId) {
     const xp = isDraw ? results.xpGainWinner : (winner === 0 ? results.xpGainWinner : results.xpGainLoser);
-    addXpOnChain(heroNftAddress, p0.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p0.heroId}: +${xp}`); });
+    const h = await addXpOnChain(heroNftAddress, p0.heroId, xp);
+    if (h) console.log(`XP granted to hero ${p0.heroId}: +${xp}`);
   }
   if (p1?.heroId) {
     const xp = isDraw ? results.xpGainLoser : (winner === 1 ? results.xpGainWinner : results.xpGainLoser);
-    addXpOnChain(heroNftAddress, p1.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p1.heroId}: +${xp}`); });
+    const h = await addXpOnChain(heroNftAddress, p1.heroId, xp);
+    if (h) console.log(`XP granted to hero ${p1.heroId}: +${xp}`);
   }
 }
 
