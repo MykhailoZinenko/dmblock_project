@@ -8,6 +8,7 @@ import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './au
 import { cleanupSettlement } from './settlement.js';
 import { calculateResults, getElo } from './ratings.js';
 import { settleOnChain, addXpOnChain } from './chainSettlement.js';
+import { verifyDeckOwnership } from './verifyDeck.js';
 import type { ClientMessage, ServerMessage, GameAction, MatchEvent } from './protocol.js';
 import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
 
@@ -147,7 +148,7 @@ function tryStartMatch(room: Room): void {
 wss.on('connection', (ws) => {
   clients.set(ws, { duelId: null, seat: 0 });
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let msg: ClientMessage;
     try { msg = JSON.parse(String(raw)); } catch { return; }
 
@@ -238,6 +239,12 @@ wss.on('connection', (ws) => {
           return;
         }
         player.heroId = msg.heroId;
+
+        const deckCheck = await verifyDeckOwnership(player.address, msg.deck);
+        if (!deckCheck.valid) {
+          send(ws, { type: 'error', message: `Deck invalid: ${deckCheck.reason}` });
+          return;
+        }
 
         if (!room.runtime) {
           const p0 = room.players[0];
