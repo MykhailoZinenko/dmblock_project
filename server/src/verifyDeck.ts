@@ -2,9 +2,9 @@ import { createPublicClient, http, parseAbi } from 'viem';
 import { foundry, sepolia } from 'viem/chains';
 
 const CARD_NFT_ABI = parseAbi([
-  'function balanceOf(address owner) view returns (uint256)',
-  'function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)',
-  'function cardIdOf(uint256 tokenId) view returns (uint256)',
+  'function totalSupply() view returns (uint256)',
+  'function ownerOf(uint256 tokenId) view returns (address)',
+  'function tokenCardId(uint256 tokenId) view returns (uint256)',
 ]);
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
@@ -26,29 +26,42 @@ export async function verifyDeckOwnership(playerAddress: string, deckCardIds: nu
 
   try {
     const client = getClient();
-    const balance = await client.readContract({
-      address: CARD_NFT_ADDRESS as `0x${string}`,
-      abi: CARD_NFT_ABI,
-      functionName: 'balanceOf',
-      args: [playerAddress as `0x${string}`],
+    const addr = CARD_NFT_ADDRESS as `0x${string}`;
+    const player = playerAddress.toLowerCase();
+
+    const totalSupply = await client.readContract({
+      address: addr, abi: CARD_NFT_ABI, functionName: 'totalSupply',
     });
 
-    const ownedCardIds = new Map<number, number>();
-    for (let i = 0; i < Number(balance); i++) {
-      const tokenId = await client.readContract({
-        address: CARD_NFT_ADDRESS as `0x${string}`,
-        abi: CARD_NFT_ABI,
-        functionName: 'tokenOfOwnerByIndex',
-        args: [playerAddress as `0x${string}`, BigInt(i)],
-      });
-      const cardId = await client.readContract({
-        address: CARD_NFT_ADDRESS as `0x${string}`,
-        abi: CARD_NFT_ABI,
-        functionName: 'cardIdOf',
-        args: [tokenId],
-      });
-      const cid = Number(cardId);
-      ownedCardIds.set(cid, (ownedCardIds.get(cid) ?? 0) + 1);
+    const total = Number(totalSupply);
+    const ownedCardCounts = new Map<number, number>();
+
+    const ownerCalls = Array.from({ length: total }, (_, i) => ({
+      address: addr, abi: CARD_NFT_ABI, functionName: 'ownerOf' as const, args: [BigInt(i)],
+    }));
+
+    const owners = await client.multicall({ contracts: ownerCalls });
+
+    const ownedTokenIds: number[] = [];
+    for (let i = 0; i < total; i++) {
+      const r = owners[i];
+      if (r.status === 'success' && (r.result as string).toLowerCase() === player) {
+        ownedTokenIds.push(i);
+      }
+    }
+
+    const cardIdCalls = ownedTokenIds.map(tid => ({
+      address: addr, abi: CARD_NFT_ABI, functionName: 'tokenCardId' as const, args: [BigInt(tid)],
+    }));
+
+    const cardIds = await client.multicall({ contracts: cardIdCalls });
+
+    for (let i = 0; i < cardIds.length; i++) {
+      const r = cardIds[i];
+      if (r.status === 'success') {
+        const cid = Number(r.result as bigint);
+        ownedCardCounts.set(cid, (ownedCardCounts.get(cid) ?? 0) + 1);
+      }
     }
 
     const needed = new Map<number, number>();
@@ -57,15 +70,15 @@ export async function verifyDeckOwnership(playerAddress: string, deckCardIds: nu
     }
 
     for (const [cid, count] of needed) {
-      const owned = ownedCardIds.get(cid) ?? 0;
+      const owned = ownedCardCounts.get(cid) ?? 0;
       if (owned < count) {
-        return { valid: false, reason: `You don't own enough copies of card ${cid} (need ${count}, have ${owned})` };
+        return { valid: false, reason: `Not enough copies of card ${cid} (need ${count}, own ${owned})` };
       }
     }
 
     return { valid: true };
   } catch (err) {
-    console.error('Deck verification failed:', (err as Error).message);
+    console.error('Deck verification error:', (err as Error).message);
     return { valid: true };
   }
 }
