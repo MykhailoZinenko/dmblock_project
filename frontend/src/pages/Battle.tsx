@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import { useAccount, useSignTypedData } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 import { Engine } from '../engine/Engine';
 import { BattleScene, type AttackableTarget } from '../game/BattleScene';
 import {
@@ -44,7 +44,7 @@ export default function Battle() {
   const [searchParams] = useSearchParams();
   const duelId = searchParams.get('duel') ? Number(searchParams.get('duel')) : null;
   const { address } = useAccount();
-  const { signTypedDataAsync } = useSignTypedData();
+  const { data: walletClient } = useWalletClient();
 
   const serverRef = useRef<ServerConnection | null>(null);
   const [multiplayerStatus, setMultiplayerStatus] = useState<string>('');
@@ -420,7 +420,7 @@ export default function Battle() {
   // --- Multiplayer session ---
 
   useEffect(() => {
-    if (duelId === null || !address) return;
+    if (duelId === null || !address || !walletClient) return;
     return attachBattleMultiplayer({
       duelId,
       address,
@@ -452,9 +452,15 @@ export default function Battle() {
           sceneRef.current?.clearHighlights();
         }
       },
-      signTypedData: signTypedDataAsync,
+      signTypedData: (params) => walletClient.signTypedData({
+        account: walletClient.account,
+        domain: params.domain,
+        types: params.types as any,
+        primaryType: params.primaryType as any,
+        message: params.message,
+      }),
     });
-  }, [duelId, address, syncUI, resetTimer, signTypedDataAsync]);
+  }, [duelId, address, walletClient, syncUI, resetTimer]);
 
   // --- Derived display values ---
 

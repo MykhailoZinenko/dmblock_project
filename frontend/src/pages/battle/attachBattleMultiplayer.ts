@@ -35,8 +35,9 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
   // ── Auth ──
   conn.on('auth-challenge', (nonce: string) => {
     p.setMultiplayerStatus('Signing session...');
-    conn.authenticate(p.signTypedData, nonce).catch(() => {
-      p.setMultiplayerStatus('Wallet signature rejected.');
+    conn.authenticate(p.signTypedData, nonce).catch((err) => {
+      console.error('Auth failed:', err);
+      p.setMultiplayerStatus(`Auth failed: ${err?.message ?? err}`);
     });
   });
 
