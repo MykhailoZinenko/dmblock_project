@@ -1,8 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
-import { cardRegistry, getCard } from '../game/cardRegistry';
-import { CardType, Faction, Rarity } from '../game/types';
-import type { CardDefinition } from '../game/types';
+import { cardRegistry, getCard, CardType, Faction, Rarity } from '@arcana/game-core';
+import type { CardDefinition } from '@arcana/game-core';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */

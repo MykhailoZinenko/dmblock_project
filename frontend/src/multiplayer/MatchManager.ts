@@ -1,14 +1,16 @@
 import { ConnectionManager } from "./ConnectionManager.js";
-import { hashState } from "../game/stateHash.js";
+import {
+  hashState,
+  ACTIVATION_TIMER_SECONDS, TIMEOUT_DAMAGE,
+  canSpawn, executeSpawn,
+  executeMove,
+  executeAttack,
+  executeHeroAttack,
+  executeCast,
+  checkWinCondition,
+} from '@arcana/game-core';
+import type { GameController } from '@arcana/game-core';
 import type { GameAction, PeerMessage } from "./protocol.js";
-import type { GameController } from "../game/GameController.js";
-import { ACTIVATION_TIMER_SECONDS, TIMEOUT_DAMAGE } from "../game/constants.js";
-import { canSpawn, executeSpawn } from "../game/actions/spawnUnit.js";
-import { executeMove } from "../game/actions/moveUnit.js";
-import { executeAttack } from "../game/actions/attackUnit.js";
-import { executeHeroAttack } from "../game/actions/heroActions.js";
-import { executeCast } from "../game/actions/castSpell.js";
-import { checkWinCondition } from "../game/actions/heroActions.js";
 
 // ---------------------------------------------------------------------------
 // Types

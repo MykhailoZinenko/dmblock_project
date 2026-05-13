@@ -6,20 +6,19 @@ import { Graphics } from '../engine/nodes/Graphics';
 import { Sprite } from '../engine/nodes/Sprite';
 import { Text } from '../engine/nodes/Text';
 import { AnimationController, type AttackDirection } from './AnimationController';
-import { hex2px, isValidCell } from './hexUtils';
-import { getCard, isBuilding } from './cardRegistry';
-import { AnimatedSprite } from '../engine/nodes/AnimatedSprite';
-import { SpriteSheet } from '../engine/textures/SpriteSheet';
-import { arrowProjectile, spellFxConfigs, sheepSpriteConfig } from './spriteConfig';
-import type { UnitInstance, HexCoord } from './types';
 import {
+  hex2px, isValidCell, getCard, isBuilding,
   GRID_COLS, GRID_ROWS, HEX_SIZE,
   P1_DEPLOY_COLS, P2_DEPLOY_COLS,
   UNIT_MOVE_SPEED,
   HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_Y_OFFSET,
   HERO_HP,
-} from './constants';
-import { HERO_HEX, HERO_ADJACENT } from './actions/heroActions';
+  HERO_HEX, HERO_ADJACENT,
+} from '@arcana/game-core';
+import type { UnitInstance, HexCoord } from '@arcana/game-core';
+import { AnimatedSprite } from '../engine/nodes/AnimatedSprite';
+import { SpriteSheet } from '../engine/textures/SpriteSheet';
+import { arrowProjectile, spellFxConfigs, sheepSpriteConfig } from './spriteConfig';
 
 export interface AttackableTarget {
   unitUid: number;

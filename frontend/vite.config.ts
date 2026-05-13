@@ -8,7 +8,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: [
-      'src/game/__tests__/**/*.test.ts',
       'src/multiplayer/__tests__/**/*.test.ts',
       'src/lib/__tests__/**/*.test.ts',
       'src/engine/__tests__/**/*.test.ts',
@@ -16,18 +15,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
-        'src/game/**/*.ts',
         'src/multiplayer/**/*.ts',
         'src/lib/**/*.ts',
         'src/engine/**/*.ts',
       ],
       exclude: [
         'src/**/__tests__/**',
-        'src/game/types.ts',
-        'src/game/constants.ts',
-        'src/game/BattleScene.ts',
-        'src/game/AnimationController.ts',
-        'src/game/spriteConfig.ts',
         'src/engine/Engine.ts',
         'src/engine/index.ts',
         'src/engine/render/**',

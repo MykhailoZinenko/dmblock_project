@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MatchManager } from '../MatchManager';
 import { ConnectionManager } from '../ConnectionManager';
-import { GameController } from '../../game/GameController';
+import { GameController, ACTIVATION_TIMER_SECONDS, TIMEOUT_DAMAGE, executeSpawn } from '@arcana/game-core';
 import type { PeerMessage, GameAction } from '../protocol';
-import { ACTIVATION_TIMER_SECONDS, TIMEOUT_DAMAGE } from '../../game/constants';
-import { executeSpawn } from '../../game/actions/spawnUnit';
 
 // ---------------------------------------------------------------------------
 // Helpers — fake ConnectionManager
@@ -321,7 +319,7 @@ describe('MatchManager', () => {
       const ctrl = await setupPlaying();
       const state = ctrl.getState();
       state.players[0].mana = 20;
-      const { executeSpawn } = await import('../../game/actions/spawnUnit');
+      const { executeSpawn } = await import('@arcana/game-core');
       const unit = executeSpawn(state, 0, 0, { col: 0, row: 0 });
       ctrl.rebuildQueue();
       conn.simulateMessage({
@@ -342,7 +340,7 @@ describe('MatchManager', () => {
     it('handles attack action from opponent', async () => {
       const ctrl = await setupPlaying();
       const state = ctrl.getState();
-      const { executeSpawn } = await import('../../game/actions/spawnUnit');
+      const { executeSpawn } = await import('@arcana/game-core');
       const attacker = executeSpawn(state, 0, 1, { col: 5, row: 5 });
       const target = executeSpawn(state, 1, 0, { col: 6, row: 5 });
       attacker.remainingAp = 1;
@@ -355,8 +353,8 @@ describe('MatchManager', () => {
     it('handles attack-hero action from opponent', async () => {
       const ctrl = await setupPlaying();
       const state = ctrl.getState();
-      const { executeSpawn } = await import('../../game/actions/spawnUnit');
-      const { HERO_ADJACENT } = await import('../../game/actions/heroActions');
+      const { executeSpawn } = await import('@arcana/game-core');
+      const { HERO_ADJACENT } = await import('@arcana/game-core');
       const adj = HERO_ADJACENT[1][0];
       const attacker = executeSpawn(state, 0, 1, { col: adj.col, row: adj.row });
       attacker.remainingAp = 1;
@@ -370,7 +368,7 @@ describe('MatchManager', () => {
       const ctrl = await setupPlaying();
       const state = ctrl.getState();
       state.players[0].mana = 20;
-      const { executeSpawn } = await import('../../game/actions/spawnUnit');
+      const { executeSpawn } = await import('@arcana/game-core');
       const enemy = executeSpawn(state, 1, 0, { col: 14, row: 0 });
       conn.simulateMessage({
         type: 'action',

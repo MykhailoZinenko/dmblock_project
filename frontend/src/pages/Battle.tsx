@@ -3,33 +3,29 @@ import { useSearchParams, useNavigate } from 'react-router';
 import { useAccount } from 'wagmi';
 import { Engine } from '../engine/Engine';
 import { BattleScene, type AttackableTarget } from '../game/BattleScene';
-import { hex2px, px2hex, isValidCell } from '../game/hexUtils';
 import {
+  hex2px, px2hex, isValidCell,
   GRID_COLS, GRID_ROWS, HEX_SIZE,
   P1_DEPLOY_COLS, P2_DEPLOY_COLS,
   HERO_HP, STARTING_MANA, AUTO_END_DELAY,
   ACTIVATION_TIMER_SECONDS,
-} from '../game/constants';
-import {
   isBarrierUp, canAttackHero, executeHeroAttack,
   checkWinCondition, applyTimeoutDamage, HERO_HEX,
-} from '../game/actions/heroActions';
-import { GameController } from '../game/GameController';
-import { canSpawn, executeSpawn } from '../game/actions/spawnUnit';
-import { canCast, executeCast, getSpellTargets } from '../game/actions/castSpell';
-import { getReachableHexes, canMove, executeMove } from '../game/actions/moveUnit';
-import {
+  GameController,
+  canSpawn, executeSpawn,
+  canCast, executeCast, getSpellTargets,
+  getReachableHexes, canMove, executeMove,
   getAttackTargets, canAttack, executeAttack,
   getAutoWalkHex, getAutoWalkTargets,
-} from '../game/actions/attackUnit';
-import { getCard, isBuilding, isMelee } from '../game/cardRegistry';
-import { CardType, SpellTargetType } from '../game/types';
-import type { UnitInstance, HexCoord } from '../game/types';
+  getCard, isBuilding, isMelee,
+  CardType, SpellTargetType,
+  hashState,
+} from '@arcana/game-core';
+import type { UnitInstance, HexCoord } from '@arcana/game-core';
 import { CardPicker } from '../components/CardPicker';
 import { ArcanaPanel, ArcanaButton, ArcanaBar } from '../ui/components/index';
 import { ConnectionManager } from '../multiplayer/ConnectionManager';
 import { MatchManager } from '../multiplayer/MatchManager';
-import { hashState } from '../game/stateHash';
 import type { GameAction } from '../multiplayer/protocol';
 import type { BattleTurnPhase as TurnPhase, BattlePriorityState as PriorityState } from './battle/battleTypes';
 import { attachBattleMultiplayer } from './battle/attachBattleMultiplayer';

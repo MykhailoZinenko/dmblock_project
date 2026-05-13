@@ -11,9 +11,7 @@ import {
   type AnimState,
   type UnitSpriteConfig,
 } from './spriteConfig';
-import { getCard, isBuilding } from './cardRegistry';
-import { hex2px } from './hexUtils';
-import { UNIT_TARGET_HEIGHT, BUILDING_1x1_TARGET_HEIGHT, BUILDING_2x2_TARGET_HEIGHT } from './constants';
+import { getCard, isBuilding, hex2px, UNIT_TARGET_HEIGHT, BUILDING_1x1_TARGET_HEIGHT, BUILDING_2x2_TARGET_HEIGHT } from '@arcana/game-core';
 
 export type AttackDirection = 'top' | 'topright' | 'side' | 'bottomright' | 'bottom';
 
