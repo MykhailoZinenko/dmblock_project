@@ -95,7 +95,7 @@ describe('Ticker', () => {
     ticker.start();
 
     // Simulate a frame at t=1016.67
-    if (rafCallback) rafCallback(1016.67);
+    if (rafCallback) (rafCallback as (t: number) => void)(1016.67);
     expect(called).toBe(true);
     expect(Math.abs(ticker.deltaTime - 0.01667)).toBeLessThanOrEqual(0.001);
 

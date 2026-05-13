@@ -142,10 +142,10 @@ export class ServerConnection {
 
   async authenticate(
     signTypedData: (params: {
-      domain: typeof SESSION_DOMAIN;
-      types: typeof SESSION_TYPES;
-      primaryType: 'Session';
-      message: Record<string, unknown>;
+      domain: any;
+      types: any;
+      primaryType: string;
+      message: any;
     }) => Promise<`0x${string}`>,
     nonce: string,
   ): Promise<void> {
@@ -165,7 +165,7 @@ export class ServerConnection {
     });
 
     const sigBytes = hexToBytes(signature);
-    const keyMaterial = await crypto.subtle.digest('SHA-256', sigBytes);
+    const keyMaterial = await crypto.subtle.digest('SHA-256', sigBytes.buffer as ArrayBuffer);
     this.sessionKey = await crypto.subtle.importKey(
       'raw', keyMaterial, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
     );

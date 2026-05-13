@@ -1055,7 +1055,7 @@ export default function Visual14() {
                   ? 'The duel concluded without a ranked winner.'
                   : 'The opposing hero has fallen.'}
               </div>
-              <ArcanaButton variant="gold" size="md" onClick={() => window.location.reload()}>
+              <ArcanaButton variant="blue" size="md" onClick={() => window.location.reload()}>
                 New Battle
               </ArcanaButton>
             </div>

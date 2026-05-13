@@ -349,7 +349,7 @@ function DuelCard({
         )}
         {action !== "none" && onAction && (
           <ArcanaButton
-            variant={action === "cancel" ? "red" : action === "battle" ? "gold" : "blue"}
+            variant={action === "cancel" ? "red" : "blue"}
             size="sm"
             onClick={onAction}
             disabled={disabled || (action === "claim" && !isExpired)}

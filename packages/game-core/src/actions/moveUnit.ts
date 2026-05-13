@@ -145,7 +145,7 @@ export function executeMove(
   }
 
   // Update occupiedCells
-  (unit as { occupiedCells: HexCoord[] }).occupiedCells = newCells;
+  (unit as unknown as { occupiedCells: HexCoord[] }).occupiedCells = newCells;
 
   // Set new board cells
   for (const cell of newCells) {
