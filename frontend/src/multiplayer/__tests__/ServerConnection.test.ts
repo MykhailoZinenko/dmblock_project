@@ -129,9 +129,10 @@ describe('ServerConnection', () => {
         events: [{ type: 'activation-changed', uid: null }],
         state: fakeState,
         controllingPlayer: 0,
+        isPriority: false,
       });
       expect(handler).toHaveBeenCalledWith(
-        1, { type: 'pass' }, [{ type: 'activation-changed', uid: null }], fakeState, 0,
+        1, { type: 'pass' }, [{ type: 'activation-changed', uid: null }], fakeState, 0, false,
       );
     });
 

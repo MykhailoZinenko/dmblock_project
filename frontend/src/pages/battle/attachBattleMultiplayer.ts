@@ -18,7 +18,7 @@ export interface AttachBattleMultiplayerInput {
   setMultiplayerStatus: (s: string) => void;
   setGameOver: (result: { winner: number }) => void;
   setMySeat: (seat: 0 | 1) => void;
-  setMyTurn: (turn: boolean) => void;
+  setMyTurn: (turn: boolean, isPriority: boolean) => void;
   signTypedData: (params: {
     domain: { name: string; chainId: number };
     types: Record<string, Array<{ name: string; type: string }>>;
@@ -55,7 +55,7 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
   });
 
   // ── Match started (new game OR reconnect — same handler) ──
-  conn.on('match-started', (serverState, seat, _opponent, _seq, controllingPlayer) => {
+  conn.on('match-started', (serverState, seat, _opponent, _seq, controllingPlayer, isPriority) => {
     p.setMySeat(seat);
     p.setMultiplayerStatus('');
 
@@ -76,11 +76,11 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     }
 
     p.syncUI();
-    p.setMyTurn(controllingPlayer === seat);
+    p.setMyTurn(controllingPlayer === seat, isPriority);
   });
 
   // ── Action confirmed: play visuals, replace state ──
-  conn.on('action-confirmed', (_seq, _action, events, serverState, controllingPlayer) => {
+  conn.on('action-confirmed', (_seq, _action, events, serverState, controllingPlayer, isPriority) => {
     const ctrl = p.getCtrl();
     const scene = p.getScene();
     if (!ctrl || !scene) return;
@@ -89,14 +89,14 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     applyServerSnapshot(ctrl.getState(), serverState);
     p.syncUI();
     p.resetTimer();
-    p.setMyTurn(controllingPlayer === conn.seat);
+    p.setMyTurn(controllingPlayer === conn.seat, isPriority);
   });
 
   // ── Action rejected: reset UI ──
   conn.on('action-rejected', (_seq, reason) => {
     p.setMultiplayerStatus(`Rejected: ${reason}`);
     setTimeout(() => p.setMultiplayerStatus(''), 3000);
-    p.setMyTurn(true);
+    p.setMyTurn(true, false);
   });
 
   // ── Timeout ──

@@ -435,18 +435,24 @@ export default function Battle() {
         gameOverRef.current = true;
       },
       setMySeat,
-      setMyTurn: (turn: boolean) => {
+      setMyTurn: (turn: boolean, isPriority: boolean) => {
         setMyTurn(turn);
         myTurnRef.current = turn;
         if (turn) {
-          const cu = ctrlRef.current?.getCurrentUnit();
-          if (cu) {
-            setUI({ type: 'unit_turn' });
-            uiRef.current = { type: 'unit_turn' };
-            showActiveUnitHL();
-          } else {
+          if (isPriority) {
             setUI({ type: 'pick_card' });
             uiRef.current = { type: 'pick_card' };
+            sceneRef.current?.clearHighlights();
+          } else {
+            const cu = ctrlRef.current?.getCurrentUnit();
+            if (cu) {
+              setUI({ type: 'unit_turn' });
+              uiRef.current = { type: 'unit_turn' };
+              showActiveUnitHL();
+            } else {
+              setUI({ type: 'pick_card' });
+              uiRef.current = { type: 'pick_card' };
+            }
           }
         } else {
           sceneRef.current?.clearHighlights();

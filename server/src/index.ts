@@ -33,6 +33,7 @@ function broadcast(room: Room, msg: ServerMessage): void {
 function sendActionConfirmed(room: Room, action: GameAction, events: MatchEvent[]): void {
   if (!room.runtime) return;
   const controllingPlayer = room.runtime.getControllingPlayer();
+  const isPriority = room.runtime.getTurnPhase().type === 'priority';
   const seq = room.runtime.seq;
   for (const p of room.players) {
     if (!p?.ws) continue;
@@ -43,6 +44,7 @@ function sendActionConfirmed(room: Room, action: GameAction, events: MatchEvent[
       events,
       state: room.runtime.getSnapshotForSeat(p.seat),
       controllingPlayer,
+      isPriority,
     });
   }
 }
@@ -87,6 +89,7 @@ function handleGameOver(room: Room): void {
 function tryStartMatch(room: Room): void {
   if (!room.runtime || room.runtime.phase !== 'playing') return;
   const controllingPlayer = room.runtime.getControllingPlayer();
+  const isPriority = room.runtime.getTurnPhase().type === 'priority';
   for (const p of room.players) {
     if (p?.ws) {
       send(p.ws, {
@@ -96,6 +99,7 @@ function tryStartMatch(room: Room): void {
         state: room.runtime.getSnapshotForSeat(p.seat),
         seq: room.runtime.seq,
         controllingPlayer,
+        isPriority,
       });
     }
   }
@@ -174,6 +178,7 @@ wss.on('connection', (ws) => {
                 state: room.runtime.getSnapshotForSeat(clientState.seat),
                 seq: room.runtime.seq,
                 controllingPlayer: room.runtime.getControllingPlayer(),
+                isPriority: room.runtime.getTurnPhase().type === 'priority',
               });
               startActivationTimer(room);
               return;
