@@ -7,7 +7,7 @@ import {
 import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './auth.js';
 import { cleanupSettlement } from './settlement.js';
 import { calculateResults, getElo } from './ratings.js';
-import { settleOnChain, addXpOnChain } from './chainSettlement.js';
+import { settleOnChain, settleDualSig, addXpOnChain } from './chainSettlement.js';
 import { verifyDeckOwnership } from './verifyDeck.js';
 import type { ClientMessage, ServerMessage, GameAction, MatchEvent } from './protocol.js';
 import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
@@ -90,6 +90,8 @@ function startActivationTimer(room: Room): void {
   }, ACTIVATION_TIMER_SECONDS * 1000);
 }
 
+const ARBITER_SETTLE_TIMEOUT_MS = 60_000;
+
 function handleGameOver(room: Room): void {
   if (!room.runtime) return;
   if (room.activationTimer) {
@@ -105,23 +107,67 @@ function handleGameOver(room: Room): void {
   const results = calculateResults(winnerAddress, loserAddress, isDraw, turnCount);
   broadcast(room, { type: 'game-over', winner: winner ?? -1, reason: room.runtime.winReason, results });
 
-  settleOnChain(room.duelId, winnerAddress).then(txHash => {
-    if (txHash) broadcast(room, { type: 'duel-settled', txHash });
-  });
+  // Request both players to sign the settlement
+  broadcast(room, { type: 'sign-request', duelId: room.duelId, winner: winnerAddress });
 
-  // Grant XP on-chain
+  // Track collected signatures
+  const sigs: [string | null, string | null] = [null, null];
+  (room as any)._settlementSigs = sigs;
+  (room as any)._winnerAddress = winnerAddress;
+  (room as any)._results = results;
+
+  // Arbiter fallback after timeout if both sigs not collected
+  (room as any)._arbiterTimer = setTimeout(() => {
+    if (sigs[0] && sigs[1]) return;
+    console.log(`Arbiter fallback for duel ${room.duelId} — not all players signed`);
+    settleOnChain(room.duelId, winnerAddress).then(txHash => {
+      if (txHash) broadcast(room, { type: 'duel-settled', txHash });
+    });
+    grantXp(room, winner, isDraw, results);
+  }, ARBITER_SETTLE_TIMEOUT_MS);
+}
+
+function tryDualSigSettle(room: Room): void {
+  const sigs = (room as any)._settlementSigs as [string | null, string | null];
+  const winnerAddress = (room as any)._winnerAddress as string;
+  const results = (room as any)._results;
+  const winner = room.runtime?.winner;
+  const isDraw = winner === null || winner === undefined || winner < 0;
+
+  if (!sigs[0] || !sigs[1]) return;
+
+  // Cancel arbiter timer
+  if ((room as any)._arbiterTimer) {
+    clearTimeout((room as any)._arbiterTimer);
+    (room as any)._arbiterTimer = null;
+  }
+
+  console.log(`Dual-sig settlement for duel ${room.duelId}`);
+  settleDualSig(room.duelId, winnerAddress, sigs[0], sigs[1]).then(txHash => {
+    if (txHash) {
+      broadcast(room, { type: 'duel-settled', txHash });
+    } else {
+      // Dual-sig failed, fall back to arbiter
+      settleOnChain(room.duelId, winnerAddress).then(h => {
+        if (h) broadcast(room, { type: 'duel-settled', txHash: h });
+      });
+    }
+  });
+  grantXp(room, winner ?? -1, isDraw, results);
+}
+
+function grantXp(room: Room, winner: number, isDraw: boolean, results: any): void {
   const heroNftAddress = process.env.HERO_NFT_ADDRESS;
-  if (heroNftAddress) {
-    const p0 = room.players[0];
-    const p1 = room.players[1];
-    if (p0?.heroId) {
-      const xp = isDraw ? results.xpGainWinner : (winner === 0 ? results.xpGainWinner : results.xpGainLoser);
-      addXpOnChain(heroNftAddress, p0.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p0.heroId}: +${xp}`); });
-    }
-    if (p1?.heroId) {
-      const xp = isDraw ? results.xpGainLoser : (winner === 1 ? results.xpGainWinner : results.xpGainLoser);
-      addXpOnChain(heroNftAddress, p1.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p1.heroId}: +${xp}`); });
-    }
+  if (!heroNftAddress) return;
+  const p0 = room.players[0];
+  const p1 = room.players[1];
+  if (p0?.heroId) {
+    const xp = isDraw ? results.xpGainWinner : (winner === 0 ? results.xpGainWinner : results.xpGainLoser);
+    addXpOnChain(heroNftAddress, p0.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p0.heroId}: +${xp}`); });
+  }
+  if (p1?.heroId) {
+    const xp = isDraw ? results.xpGainLoser : (winner === 1 ? results.xpGainWinner : results.xpGainLoser);
+    addXpOnChain(heroNftAddress, p1.heroId, xp).then(h => { if (h) console.log(`XP granted to hero ${p1.heroId}: +${xp}`); });
   }
 }
 
@@ -306,14 +352,14 @@ wss.on('connection', (ws) => {
 
       case 'sign-result': {
         if (clientState.duelId === null) return;
-        try {
-          const result = submitSignature(msg.duelId, clientState.seat, msg.signature);
-          if (result.complete) {
-            console.log(`Settlement complete for duel ${msg.duelId}: both signatures collected`);
-            cleanupSettlement(msg.duelId);
+        const room = getOrCreateRoom(clientState.duelId);
+        const sigs = (room as any)._settlementSigs as [string | null, string | null] | undefined;
+        if (sigs) {
+          sigs[clientState.seat] = msg.signature;
+          console.log(`Sig received from seat ${clientState.seat} for duel ${clientState.duelId}`);
+          if (sigs[0] && sigs[1]) {
+            tryDualSigSettle(room);
           }
-        } catch {
-          // No settlement in progress
         }
         break;
       }

@@ -468,6 +468,10 @@ export default function Battle() {
         primaryType: params.primaryType as any,
         message: params.message,
       }),
+      signMessage: (message) => walletClient.signMessage({
+        account: walletClient.account,
+        message: { raw: message },
+      }),
     });
   }, [duelId, address, walletClient, syncUI, resetTimer]);
 

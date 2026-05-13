@@ -4,6 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 const DUEL_MANAGER_ABI = parseAbi([
   'function arbiterSettle(uint256 duelId, address winner) external',
+  'function settleDuel(uint256 duelId, address winner, bytes sig1, bytes sig2) external',
 ]);
 
 const HERO_NFT_ABI = parseAbi([
@@ -52,6 +53,26 @@ export async function settleOnChain(duelId: number, winnerAddress: string): Prom
     return hash;
   } catch (err) {
     console.error(`Chain settlement failed for duel ${duelId}:`, (err as Error).message);
+    return '';
+  }
+}
+
+export async function settleDualSig(duelId: number, winnerAddress: string, sig1: string, sig2: string): Promise<string> {
+  if (!DUEL_MANAGER_ADDRESS) return '';
+  const client = getClient();
+  if (!client) return '';
+
+  try {
+    const hash = await client.writeContract({
+      address: DUEL_MANAGER_ADDRESS as `0x${string}`,
+      abi: DUEL_MANAGER_ABI,
+      functionName: 'settleDuel',
+      args: [BigInt(duelId), winnerAddress as `0x${string}`, sig1 as `0x${string}`, sig2 as `0x${string}`],
+    });
+    console.log(`Duel ${duelId} settled via dual-sig. TX: ${hash}`);
+    return hash;
+  } catch (err) {
+    console.error(`Dual-sig settlement failed for duel ${duelId}:`, (err as Error).message);
     return '';
   }
 }
