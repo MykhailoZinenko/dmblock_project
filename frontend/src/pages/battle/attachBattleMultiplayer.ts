@@ -1,12 +1,11 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { MutableRefObject } from 'react';
 import { ServerConnection } from '../../multiplayer/ServerConnection';
 import type { MatchEvent, SerializedGameState, GameAction } from '../../multiplayer/ServerConnection';
 import { listDecks } from '../../lib/deckStorage';
 import { DECK_SIZE } from '../../lib/deckValidation';
 import { HERO_HP } from '@arcana/game-core';
-import type { GameController } from '@arcana/game-core';
+import type { GameController, GameState } from '@arcana/game-core';
 import type { BattleScene } from '../../game/BattleScene';
-import type { BattleTurnPhase, BattlePriorityState } from './battleTypes';
 
 export interface AttachBattleMultiplayerInput {
   duelId: number;
@@ -14,8 +13,6 @@ export interface AttachBattleMultiplayerInput {
   serverRef: MutableRefObject<ServerConnection | null>;
   getCtrl: () => GameController | null;
   getScene: () => BattleScene | null;
-  phaseRef: MutableRefObject<BattleTurnPhase>;
-  setPhase: Dispatch<SetStateAction<BattleTurnPhase>>;
   syncUI: () => void;
   resetTimer: () => void;
   setMultiplayerStatus: (s: string) => void;
@@ -87,12 +84,16 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     p.syncUI();
   });
 
-  conn.on('action-confirmed', (_seq: number, _action: GameAction, events: MatchEvent[], _stateHash: string, controllingPlayer: number) => {
+  conn.on('action-confirmed', (_seq: number, _action: GameAction, events: MatchEvent[], serverState: SerializedGameState, controllingPlayer: number) => {
     const scene = p.getScene();
     const ctrl = p.getCtrl();
     if (!scene || !ctrl) return;
 
-    applyEventsToScene(scene, ctrl, events, p);
+    const localState = ctrl.getState();
+    playEventsOnScene(scene, localState, events);
+    applyServerSnapshot(localState, serverState);
+    p.syncUI();
+    p.resetTimer();
     p.setMyTurn(controllingPlayer === conn.seat);
   });
 
@@ -117,11 +118,26 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
     }
   });
 
-  conn.on('state-snapshot', (state: SerializedGameState, _seq: number) => {
+  conn.on('state-snapshot', (snapshot: SerializedGameState, _seq: number) => {
     p.setMultiplayerStatus('Reconnected!');
     setTimeout(() => p.setMultiplayerStatus(''), 2000);
-    // Full state rebuild from snapshot on reconnect
-    // TODO: rebuild scene from snapshot
+
+    const ctrl = p.getCtrl();
+    const scene = p.getScene();
+    if (!ctrl || !scene) return;
+
+    if (!ctrl.isGameStarted()) {
+      ctrl.startGame(0, [snapshot.players[0].hand, snapshot.players[1].hand]);
+    }
+    const localState = ctrl.getState();
+    applyServerSnapshot(localState, snapshot);
+
+    // Rebuild scene visuals from units
+    for (const unit of localState.units) {
+      if (unit.alive) scene.spawnUnit(unit);
+    }
+
+    p.syncUI();
   });
 
   conn.on('opponent-disconnected', () => {
@@ -149,78 +165,47 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
   };
 }
 
-function applyEventsToScene(
+/**
+ * Play animations from MatchEvents. Does NOT update game state —
+ * state comes from the server snapshot via applyServerSnapshot.
+ */
+function playEventsOnScene(
   scene: BattleScene,
-  ctrl: GameController,
+  localState: GameState,
   events: MatchEvent[],
-  p: Pick<AttachBattleMultiplayerInput, 'syncUI' | 'resetTimer' | 'setPhase' | 'phaseRef'>,
 ): void {
-  const state = ctrl.getState();
-
   for (const event of events) {
     switch (event.type) {
       case 'unit-spawned': {
-        const unit = event.unit;
-        state.units.push(unit);
-        for (const cell of unit.occupiedCells) {
-          state.board[cell.row][cell.col].unitUid = unit.uid;
-        }
-        scene.spawnUnit(unit);
+        scene.spawnUnit(event.unit);
         break;
       }
       case 'unit-moved': {
         if (event.path.length >= 2) {
           scene.moveUnit(event.uid, event.path, () => {});
         }
-        const movedUnit = state.units.find(u => u.uid === event.uid);
-        if (movedUnit && event.path.length > 0) {
-          const dest = event.path[event.path.length - 1];
-          // Clear old board cells
-          for (const cell of movedUnit.occupiedCells) {
-            state.board[cell.row][cell.col].unitUid = null;
-          }
-          movedUnit.col = dest.col;
-          movedUnit.row = dest.row;
-          for (const cell of movedUnit.occupiedCells) {
-            cell.col = dest.col;
-            cell.row = dest.row;
-          }
-          // Set new board cells
-          for (const cell of movedUnit.occupiedCells) {
-            state.board[cell.row][cell.col].unitUid = movedUnit.uid;
-          }
-          // Deduct AP (path length - 1 = hexes moved)
-          movedUnit.remainingAp = Math.max(0, movedUnit.remainingAp - (event.path.length - 1));
-        }
         break;
       }
       case 'unit-attacked': {
-        const target = state.units.find(u => u.uid === event.targetUid);
-        const attacker = state.units.find(u => u.uid === event.attackerUid);
+        const target = localState.units.find(u => u.uid === event.targetUid);
+        const attacker = localState.units.find(u => u.uid === event.attackerUid);
         if (target) {
-          target.currentHp = event.targetHp;
-          scene.updateHpBar(target.uid, target.currentHp, target.maxHp);
+          scene.updateHpBar(target.uid, event.targetHp, target.maxHp);
           scene.showDamageNumber({ col: target.col, row: target.row }, event.damage, event.crit);
         }
         if (attacker && event.retaliation > 0) {
-          attacker.currentHp = event.attackerHp;
-          scene.updateHpBar(attacker.uid, attacker.currentHp, attacker.maxHp);
+          scene.updateHpBar(attacker.uid, event.attackerHp, attacker.maxHp);
           scene.showDamageNumber({ col: attacker.col, row: attacker.row }, event.retaliation, false);
         }
         break;
       }
       case 'hero-attacked': {
-        state.players[event.targetPlayerId].heroHp = event.heroHp;
         scene.showHeroDamage(event.targetPlayerId, event.damage, false);
         scene.updateHeroHp(event.targetPlayerId, event.heroHp, HERO_HP);
         break;
       }
       case 'unit-died': {
-        const dead = state.units.find(u => u.uid === event.uid);
-        if (dead) {
-          dead.alive = false;
-          scene.playDeath(event.uid, () => {});
-        }
+        scene.playDeath(event.uid, () => {});
         break;
       }
       case 'spell-cast': {
@@ -228,73 +213,77 @@ function applyEventsToScene(
         break;
       }
       case 'effect-applied': {
-        if (event.effectId === 'polymorph') {
-          scene.swapToSheep(event.uid);
-        }
-        const statusLabel = event.effectId === 'slow' ? 'SLOWED'
-          : event.effectId === 'polymorph' ? 'POLYMORPHED'
-          : 'CURSED';
-        const unit = state.units.find(u => u.uid === event.uid);
-        if (unit) {
-          scene.showStatusText({ col: unit.col, row: unit.row }, statusLabel);
-        }
+        if (event.effectId === 'polymorph') scene.swapToSheep(event.uid);
+        const label = event.effectId === 'slow' ? 'SLOWED'
+          : event.effectId === 'polymorph' ? 'POLYMORPHED' : 'CURSED';
+        const u = localState.units.find(x => x.uid === event.uid);
+        if (u) scene.showStatusText({ col: u.col, row: u.row }, label);
         break;
       }
       case 'effect-expired': {
-        if (event.effectId === 'polymorph') {
-          scene.restoreFromSheep(event.uid);
-        }
+        if (event.effectId === 'polymorph') scene.restoreFromSheep(event.uid);
         break;
       }
       case 'hp-changed': {
-        const unit = state.units.find(u => u.uid === event.uid);
-        if (unit) {
-          unit.currentHp = event.hp;
-          scene.updateHpBar(unit.uid, unit.currentHp, unit.maxHp);
-        }
+        const u = localState.units.find(x => x.uid === event.uid);
+        if (u) scene.updateHpBar(u.uid, event.hp, u.maxHp);
         break;
       }
       case 'hero-hp-changed': {
-        state.players[event.playerId].heroHp = event.hp;
         scene.updateHeroHp(event.playerId, event.hp, HERO_HP);
         break;
       }
-      case 'mana-changed': {
-        state.players[event.playerId].mana = event.mana;
+      default:
         break;
-      }
-      case 'activation-changed': {
-        // Update activation queue pointer
-        if (event.uid === null) {
-          state.currentActivationIndex = state.activationQueue.length;
-        } else {
-          const idx = state.activationQueue.findIndex(u => u.uid === event.uid);
-          if (idx >= 0) state.currentActivationIndex = idx;
-        }
-        break;
-      }
-      case 'turn-changed': {
-        state.turnNumber = event.turnNumber;
-        for (const unit of state.units) {
-          if (unit.alive) {
-            unit.remainingAp = unit.speed;
-            unit.retaliatedThisTurn = false;
-          }
-        }
-        break;
-      }
-      case 'queue-rebuilt': {
-        // Rebuild activation queue from UIDs
-        state.activationQueue = event.queue
-          .map(uid => state.units.find(u => u.uid === uid))
-          .filter((u): u is NonNullable<typeof u> => u !== undefined);
-        state.currentActivationIndex = 0;
-        break;
+    }
+  }
+  scene.clearHighlights();
+}
+
+/**
+ * Replace local game state with server snapshot.
+ * This is the ONLY source of truth for state — events are for visuals only.
+ */
+function applyServerSnapshot(localState: GameState, snapshot: SerializedGameState): void {
+  // Players: copy all fields the server sends (opponent hand/deck are empty — that's correct)
+  for (let i = 0; i < 2; i++) {
+    localState.players[i].mana = snapshot.players[i].mana;
+    localState.players[i].heroHp = snapshot.players[i].heroHp;
+    localState.players[i].timeoutCount = snapshot.players[i].timeoutCount;
+    if (snapshot.players[i].hand.length > 0) {
+      localState.players[i].hand = snapshot.players[i].hand;
+    }
+    if (snapshot.players[i].deck.length > 0) {
+      localState.players[i].deck = snapshot.players[i].deck;
+    }
+  }
+
+  // Units: replace entirely from snapshot
+  localState.units = snapshot.units;
+
+  // Board: rebuild from units
+  for (let r = 0; r < localState.board.length; r++) {
+    for (let c = 0; c < localState.board[r].length; c++) {
+      localState.board[r][c].unitUid = null;
+    }
+  }
+  for (const unit of localState.units) {
+    if (!unit.alive) continue;
+    for (const cell of unit.occupiedCells) {
+      if (cell.row < localState.board.length && cell.col < localState.board[0].length) {
+        localState.board[cell.row][cell.col].unitUid = unit.uid;
       }
     }
   }
 
-  scene.clearHighlights();
-  p.syncUI();
-  p.resetTimer();
+  // Turn / queue
+  localState.turnNumber = snapshot.turnNumber;
+  localState.currentActivationIndex = snapshot.currentActivationIndex;
+  localState.nextUnitUid = snapshot.nextUnitUid;
+  localState.phase = snapshot.phase;
+
+  // Activation queue: map UIDs to unit references
+  localState.activationQueue = snapshot.activationQueue
+    .map(uid => localState.units.find(u => u.uid === uid))
+    .filter((u): u is NonNullable<typeof u> => u !== undefined);
 }

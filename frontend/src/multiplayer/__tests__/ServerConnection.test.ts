@@ -121,16 +121,17 @@ describe('ServerConnection', () => {
     it('emits action-confirmed', () => {
       const handler = vi.fn();
       conn.on('action-confirmed', handler);
+      const fakeState = { turnNumber: 1, players: [] };
       mockWs.receive({
         type: 'action-confirmed',
         seq: 1,
         action: { type: 'pass' },
         events: [{ type: 'activation-changed', uid: null }],
-        stateHash: 'abc',
+        state: fakeState,
         controllingPlayer: 0,
       });
       expect(handler).toHaveBeenCalledWith(
-        1, { type: 'pass' }, [{ type: 'activation-changed', uid: null }], 'abc', 0,
+        1, { type: 'pass' }, [{ type: 'activation-changed', uid: null }], fakeState, 0,
       );
     });
 

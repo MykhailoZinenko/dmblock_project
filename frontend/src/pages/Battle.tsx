@@ -443,8 +443,6 @@ export default function Battle() {
       serverRef,
       getCtrl: () => ctrlRef.current,
       getScene: () => sceneRef.current,
-      phaseRef: { current: { type: 'initiative' } },
-      setPhase: () => {},
       syncUI,
       resetTimer,
       setMultiplayerStatus,

@@ -6,7 +6,7 @@ import {
 } from './rooms.js';
 import { generateNonce, verifySession, deriveSessionKey, verifyHmac } from './auth.js';
 import { initSettlement, submitSignature, startArbiterTimeout, cleanupSettlement } from './settlement.js';
-import type { ClientMessage, ServerMessage } from './protocol.js';
+import type { ClientMessage, ServerMessage, GameAction, MatchEvent } from './protocol.js';
 import { ACTIVATION_TIMER_SECONDS } from '@arcana/game-core';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -30,6 +30,23 @@ function broadcast(room: Room, msg: ServerMessage): void {
   }
 }
 
+function sendActionConfirmed(room: Room, action: GameAction, events: MatchEvent[]): void {
+  if (!room.runtime) return;
+  const controllingPlayer = room.runtime.getControllingPlayer();
+  const seq = room.runtime.seq;
+  for (const p of room.players) {
+    if (!p?.ws) continue;
+    send(p.ws, {
+      type: 'action-confirmed',
+      seq,
+      action,
+      events,
+      state: room.runtime.getSnapshotForSeat(p.seat),
+      controllingPlayer,
+    });
+  }
+}
+
 function startActivationTimer(room: Room): void {
   if (room.activationTimer) clearTimeout(room.activationTimer);
   room.activationTimer = setTimeout(() => {
@@ -39,14 +56,7 @@ function startActivationTimer(room: Room): void {
     if (controlling >= 0) {
       broadcast(room, { type: 'turn-timeout', player: controlling, damage: events.length > 0 ? 3 : 0 });
     }
-    broadcast(room, {
-      type: 'action-confirmed',
-      seq: room.runtime.seq,
-      action: { type: 'pass' },
-      events,
-      stateHash: '',
-      controllingPlayer: room.runtime.getControllingPlayer(),
-    });
+    sendActionConfirmed(room, { type: 'pass' }, events);
     if (room.runtime.phase === 'game-over') {
       handleGameOver(room);
     } else {
@@ -214,14 +224,7 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        broadcast(room, {
-          type: 'action-confirmed',
-          seq: room.runtime.seq,
-          action: msg.action,
-          events: result.events,
-          stateHash: result.stateHash,
-          controllingPlayer: room.runtime.getControllingPlayer(),
-        });
+        sendActionConfirmed(room, msg.action, result.events);
 
         startActivationTimer(room);
 

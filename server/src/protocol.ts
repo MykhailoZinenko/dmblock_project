@@ -60,7 +60,7 @@ export type ServerMessage =
   | { type: 'auth-ok'; sessionStart: number }
   | { type: 'waiting-for-opponent' }
   | { type: 'match-started'; seat: 0 | 1; opponent: string; state: SerializedGameState; seq: number; controllingPlayer: number }
-  | { type: 'action-confirmed'; seq: number; action: GameAction; events: MatchEvent[]; stateHash: string; controllingPlayer: number }
+  | { type: 'action-confirmed'; seq: number; action: GameAction; events: MatchEvent[]; state: SerializedGameState; controllingPlayer: number }
   | { type: 'action-rejected'; seq: number; reason: string }
   | { type: 'state-snapshot'; state: SerializedGameState; seq: number }
   | { type: 'turn-timeout'; player: number; damage: number }

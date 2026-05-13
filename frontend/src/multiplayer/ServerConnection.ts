@@ -16,7 +16,7 @@ type EventMap = {
   'state-change': [state: ConnectionState];
   'auth-challenge': [nonce: string];
   'match-started': [state: SerializedGameState, seat: 0 | 1, opponent: string, seq: number, controllingPlayer: number];
-  'action-confirmed': [seq: number, action: GameAction, events: MatchEvent[], stateHash: string, controllingPlayer: number];
+  'action-confirmed': [seq: number, action: GameAction, events: MatchEvent[], state: SerializedGameState, controllingPlayer: number];
   'action-rejected': [seq: number, reason: string];
   'state-snapshot': [state: SerializedGameState, seq: number];
   'turn-timeout': [player: number, damage: number];
@@ -103,7 +103,7 @@ export class ServerConnection {
         this.emit('match-started', msg.state, msg.seat, msg.opponent, msg.seq, msg.controllingPlayer);
         break;
       case 'action-confirmed':
-        this.emit('action-confirmed', msg.seq, msg.action, msg.events, msg.stateHash, msg.controllingPlayer);
+        this.emit('action-confirmed', msg.seq, msg.action, msg.events, msg.state, msg.controllingPlayer);
         break;
       case 'action-rejected':
         this.emit('action-rejected', msg.seq, msg.reason);
