@@ -213,11 +213,7 @@ export class MatchRuntime {
         const check = canSpawn(state, action.playerId, action.cardId, { col: action.col, row: action.row });
         if (!check.valid) return { ok: false, reason: check.reason ?? 'Cannot spawn here' };
         const spawned = executeSpawn(state, action.playerId, action.cardId, { col: action.col, row: action.row });
-        events.push({
-          type: 'unit-spawned', uid: spawned.uid,
-          playerId: action.playerId, cardId: action.cardId,
-          col: action.col, row: action.row,
-        });
+        events.push({ type: 'unit-spawned', unit: { ...spawned } });
         events.push({ type: 'mana-changed', playerId: action.playerId, mana: state.players[action.playerId].mana });
 
         if (this.turnPhase.type === 'priority') {

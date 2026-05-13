@@ -206,13 +206,14 @@ export default function Battle() {
       const { col, row, worldX, worldY } = detail;
       const ctrl = ctrlRef.current;
       const scene = sceneRef.current;
-      if (!ctrl || !scene) return;
-      if (!myTurnRef.current) return;
+      if (!ctrl || !scene) { console.log('[hex] no ctrl/scene'); return; }
+      if (!myTurnRef.current) { console.log('[hex] not my turn'); return; }
       if (gameOverRef.current) return;
 
       const currentUI = uiRef.current;
-      if (currentUI.type === 'animating') return;
+      if (currentUI.type === 'animating') { console.log('[hex] animating'); return; }
 
+      console.log('[hex]', col, row, 'ui:', currentUI.type, 'cu:', ctrl.getCurrentUnit()?.uid);
       const state = ctrl.getState();
 
       // -- Cast spell --
@@ -229,10 +230,10 @@ export default function Battle() {
         return;
       }
 
-      if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') return;
+      if (currentUI.type !== 'unit_turn' && currentUI.type !== 'unit_acted') { console.log('[hex] wrong ui:', currentUI.type); return; }
 
       const cu = ctrl.getCurrentUnit();
-      if (!cu || cu.playerId !== mySeat) return;
+      if (!cu || cu.playerId !== mySeat) { console.log('[hex] no cu or wrong player, cu:', cu, 'mySeat:', mySeat); return; }
 
       // -- Click on enemy unit --
       let targetUnit = state.units.find(u =>
@@ -280,7 +281,9 @@ export default function Battle() {
 
       // -- Move (not clicking enemy) --
       if (currentUI.type === 'unit_acted') return;
-      if (!canMove(state, cu.uid, { col, row }).valid) return;
+      const moveCheck = canMove(state, cu.uid, { col, row });
+      if (!moveCheck.valid) { console.log('[hex] canMove failed:', moveCheck.reason, 'unit:', cu.uid, 'ap:', cu.remainingAp); return; }
+      console.log('[hex] sending move', cu.uid, '->', col, row);
       sendAction({ type: 'move', unitUid: cu.uid, col, row });
     };
 

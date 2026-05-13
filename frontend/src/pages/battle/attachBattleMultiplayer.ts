@@ -3,7 +3,7 @@ import { ServerConnection } from '../../multiplayer/ServerConnection';
 import type { MatchEvent, SerializedGameState, GameAction } from '../../multiplayer/ServerConnection';
 import { listDecks } from '../../lib/deckStorage';
 import { DECK_SIZE } from '../../lib/deckValidation';
-import { HERO_HP, getCard } from '@arcana/game-core';
+import { HERO_HP } from '@arcana/game-core';
 import type { GameController } from '@arcana/game-core';
 import type { BattleScene } from '../../game/BattleScene';
 import type { BattleTurnPhase, BattlePriorityState } from './battleTypes';
@@ -98,6 +98,8 @@ export function attachBattleMultiplayer(p: AttachBattleMultiplayerInput): () => 
 
   conn.on('action-rejected', (_seq: number, reason: string) => {
     console.warn('Action rejected:', reason);
+    p.setMultiplayerStatus(`Rejected: ${reason}`);
+    setTimeout(() => p.setMultiplayerStatus(''), 3000);
   });
 
   conn.on('turn-timeout', (player: number, damage: number) => {
@@ -158,57 +160,37 @@ function applyEventsToScene(
   for (const event of events) {
     switch (event.type) {
       case 'unit-spawned': {
-        // Create a UnitInstance-like object for the scene
-        const card = getCard(event.cardId);
-        const unit = state.units.find(u => u.uid === event.uid);
-        if (!unit) {
-          // Server spawned a unit we don't have locally — create minimal representation
-          // This happens because the client doesn't run executeSpawn for MP
-          const newUnit = {
-            uid: event.uid,
-            cardId: event.cardId,
-            playerId: event.playerId,
-            col: event.col,
-            row: event.row,
-            currentHp: card.hp,
-            maxHp: card.hp,
-            attack: card.attack,
-            defense: card.defense,
-            speed: card.initiative,
-            remainingAp: card.initiative,
-            alive: true,
-            occupiedCells: [{ col: event.col, row: event.row }],
-            polymorphed: false,
-            activeEffects: [],
-            retaliatedThisTurn: false,
-            ammo: card.ammo,
-            size: card.size,
-            magicResistance: card.magicResistance,
-          };
-          state.units.push(newUnit as any);
-          state.board[event.row][event.col].unitUid = event.uid;
-          scene.spawnUnit(newUnit as any);
-        } else {
-          scene.spawnUnit(unit);
+        const unit = event.unit;
+        state.units.push(unit);
+        for (const cell of unit.occupiedCells) {
+          state.board[cell.row][cell.col].unitUid = unit.uid;
         }
+        scene.spawnUnit(unit);
         break;
       }
       case 'unit-moved': {
         if (event.path.length >= 2) {
           scene.moveUnit(event.uid, event.path, () => {});
         }
-        // Update local state position
         const movedUnit = state.units.find(u => u.uid === event.uid);
         if (movedUnit && event.path.length > 0) {
           const dest = event.path[event.path.length - 1];
-          state.board[movedUnit.row][movedUnit.col].unitUid = null;
+          // Clear old board cells
+          for (const cell of movedUnit.occupiedCells) {
+            state.board[cell.row][cell.col].unitUid = null;
+          }
           movedUnit.col = dest.col;
           movedUnit.row = dest.row;
           for (const cell of movedUnit.occupiedCells) {
             cell.col = dest.col;
             cell.row = dest.row;
           }
-          state.board[dest.row][dest.col].unitUid = movedUnit.uid;
+          // Set new board cells
+          for (const cell of movedUnit.occupiedCells) {
+            state.board[cell.row][cell.col].unitUid = movedUnit.uid;
+          }
+          // Deduct AP (path length - 1 = hexes moved)
+          movedUnit.remainingAp = Math.max(0, movedUnit.remainingAp - (event.path.length - 1));
         }
         break;
       }
@@ -293,6 +275,12 @@ function applyEventsToScene(
       }
       case 'turn-changed': {
         state.turnNumber = event.turnNumber;
+        for (const unit of state.units) {
+          if (unit.alive) {
+            unit.remainingAp = unit.speed;
+            unit.retaliatedThisTurn = false;
+          }
+        }
         break;
       }
       case 'queue-rebuilt': {

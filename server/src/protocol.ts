@@ -1,4 +1,4 @@
-import type { GameState, HexCoord } from '@arcana/game-core';
+import type { GameState, HexCoord, UnitInstance } from '@arcana/game-core';
 
 // --- Game Actions (intents from client) ---
 
@@ -14,7 +14,7 @@ export type GameAction =
 // --- Match Events (state deltas for client animation) ---
 
 export type MatchEvent =
-  | { type: 'unit-spawned'; uid: number; playerId: number; cardId: number; col: number; row: number }
+  | { type: 'unit-spawned'; unit: UnitInstance }
   | { type: 'unit-moved'; uid: number; path: HexCoord[] }
   | { type: 'unit-attacked'; attackerUid: number; targetUid: number; damage: number; retaliation: number; attackerHp: number; targetHp: number; crit: boolean }
   | { type: 'hero-attacked'; attackerUid: number; targetPlayerId: number; damage: number; heroHp: number }
